@@ -1,0 +1,19 @@
+name: flutter_side_anchor_nav
+description: Left tab bar plus scroll-sync anchored navigation for Flutter — tap a tab to scroll to its section.
+version: 0.0.1
+
+environment:
+  sdk: ^3.14.0
+  flutter: ">=3.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  material_ui: ^1.11.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
