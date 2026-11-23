@@ -156,6 +156,12 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
   final LayerLink _layerLink = LayerLink();
   final OverlayPortalController _portal = OverlayPortalController();
 
+  /// 列表的滚动控制器：列表外面那条 [Scrollbar] 要接到同一个 controller 才画得
+  /// 出来，滚动条行为也不再依赖平台 / [ScrollBehavior] 的默认注入。
+  final ScrollController _listScroll = ScrollController(
+    debugLabel: 'AnchoredDropdown.list',
+  );
+
   /// 触发器与浮层共用 groupId：点列表里的选项不会被 `onTapOutside`
   /// 当成「点在外面」提前关掉。
   final Object _tapGroup = Object();
@@ -246,6 +252,7 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
 
   @override
   void dispose() {
+    _listScroll.dispose();
     _progress.dispose();
     _controller.dispose();
     _triggerFocus.dispose();
@@ -447,17 +454,47 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
 
   Widget _buildMenu(BuildContext context) {
     final Widget? custom = widget.menuBuilder?.call(context);
-    final Widget body = custom ?? _buildItems(context);
-    return Padding(
-      padding: EdgeInsets.all(_style.padding),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxHeight: math.max(
-            0.0,
-            widget.maxMenuHeight - _style.padding * 2,
+    final double maxHeight = math.max(
+      0.0,
+      widget.maxMenuHeight - _style.padding * 2,
+    );
+
+    // 自定义内容自带滚动策略（`menuBuilder` 的文档就是这么说的），这里不再包
+    // 滚动视图，也就没有我们的滚动条。
+    if (custom != null) {
+      return Padding(
+        padding: EdgeInsets.all(_style.padding),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: maxHeight),
+          child: custom,
+        ),
+      );
+    }
+
+    // [Scrollbar] 包在 `Padding` **外面**：盒子铺满整条内容区，滑块才画在面板
+    // 内边缘上。放里面的话它会跟着 [DropdownStyle.padding] 往里缩，跟
+    // [DropdownStyle.itemPadding]（只缩进行内容）本来就没关系。
+    // `scrollbars: false` 关掉 Windows / macOS 上 [ScrollBehavior] 自动注入的
+    // 那条，否则两条滑块会叠在一起画。
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      // 见 [TextDropdown]：Material 的滑块默认离边 2px，这里压成 0，
+      // 滑块直接压在面板内边缘上。
+      child: ScrollbarTheme(
+        data: ScrollbarTheme.of(context).copyWith(crossAxisMargin: 0),
+        child: Scrollbar(
+          controller: _listScroll,
+          child: Padding(
+            padding: EdgeInsets.all(_style.padding),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: maxHeight),
+              child: SingleChildScrollView(
+                controller: _listScroll,
+                child: _buildItems(context),
+              ),
+            ),
           ),
         ),
-        child: custom == null ? SingleChildScrollView(child: body) : body,
       ),
     );
   }

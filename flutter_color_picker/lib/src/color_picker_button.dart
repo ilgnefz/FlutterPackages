@@ -42,6 +42,7 @@ class ColorPickerButton extends StatefulWidget {
     this.panelRadius = 16,
     this.panelColor,
     this.showHexField = true,
+    this.showOpacity = false,
     this.hexFormat = ColorHexFormat.hashRgb,
     this.onOpenChanged,
   });
@@ -101,6 +102,10 @@ class ColorPickerButton extends StatefulWidget {
   /// 是否显示面板底部的当前色 + hex 输入。
   final bool showHexField;
 
+  /// 是否显示面板里的透明度控制（透明度条 + 输入框右侧的百分比），
+  /// 透传给 [ColorPicker.showOpacity]。
+  final bool showOpacity;
+
   /// hex 的显示格式（`#RRGGBB` 或 `0xFFRRGGBB`）。
   final ColorHexFormat hexFormat;
 
@@ -154,6 +159,7 @@ class _ColorPickerButtonState extends State<ColorPickerButton> {
         value: _color,
         width: widget.panelWidth,
         showHexField: widget.showHexField,
+        showOpacity: widget.showOpacity,
         hexFormat: widget.hexFormat,
         onChanged: (int argb) {
           setState(() => _color = Color(argb));

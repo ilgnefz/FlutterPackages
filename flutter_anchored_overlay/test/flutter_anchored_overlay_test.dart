@@ -70,4 +70,69 @@ void main() {
     expect(find.byType(SmartTooltip), findsOneWidget);
     expect(find.text('悬停我'), findsOneWidget);
   });
+
+  testWidgets('圆角气泡会把内容裁进轮廓', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: Popover(
+              initialOpen: true,
+              style: const PopoverStyle(radius: 20, showArrow: false),
+              padding: EdgeInsets.zero,
+              content: const SizedBox(width: 180, height: 80),
+              child: const SizedBox(width: 40, height: 20),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder clipFinder = find.ancestor(
+      of: find.byKey(kPopoverContentKey),
+      matching: find.byType(ClipPath),
+    );
+    expect(clipFinder, findsWidgets);
+    // ShapeDecoration 自己也带一层 ShapeBorderClipper，外层才是我们加的。
+    final ClipPath clip = tester.widget<ClipPath>(clipFinder.first);
+    final Rect bubble = tester.getRect(find.byKey(kPopoverBubbleKey));
+    final path = clip.clipper!.getClip(bubble.size);
+    expect(path.contains(const Offset(1, 1)), isFalse);
+    expect(path.contains(Offset(bubble.width / 2, bubble.height / 2)), isTrue);
+  });
+
+  testWidgets('padding 控制气泡内边距，edgePadding 只管视口边距', (tester) async {
+    Future<double> bubbleWidth({
+      EdgeInsetsGeometry? padding,
+      double edgePadding = 8,
+    }) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: Popover(
+                initialOpen: true,
+                placement: PopoverPlacement.bottom,
+                padding: padding,
+                edgePadding: edgePadding,
+                content: const SizedBox(width: 180, height: 80),
+                child: const SizedBox(width: 40, height: 20),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      return tester.getRect(find.byKey(kPopoverBubbleKey)).width;
+    }
+
+    final double base = await bubbleWidth();
+    expect(
+      await bubbleWidth(edgePadding: 48),
+      base,
+      reason: '居中时 edgePadding 不影响气泡',
+    );
+    expect(await bubbleWidth(padding: const EdgeInsets.all(30)), base + 32);
+  });
 }

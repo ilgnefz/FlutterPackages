@@ -141,6 +141,28 @@ style: DropdownStyle.of(context).copyWith(
 ),
 ```
 
+## 滚动条
+
+内容超出 `maxPanelHeight`（`AnchoredDropdown` 是 `maxMenuHeight`）后列表内部滚动，
+右侧有一条**贴着面板内边缘**的滚动条：
+
+* 它的盒子铺满整条内容区（在 `padding` **之外**），滑块直接压在面板边框上 ——
+  `padding` 只缩进列表本体、`itemPadding` 只缩进行内容，两者怎么调都不会把它
+  往里推；
+* 宽度 / 圆角 / 颜色跟随 `ScrollbarTheme`，默认只在滚动时出现；
+* 平台自动注入的那条（Windows / macOS 上 Material 会给可滚动区域加一条）会被
+  关掉，不会叠成两条；
+* 用 `menuBuilder` 完全自定义内容时滚动归你自己管，也就不带这条。
+
+想让滑块常显，套一层 `ScrollbarTheme` 即可（`crossAxisMargin` 已经固定为 0）：
+
+```dart
+ScrollbarTheme(
+  data: ScrollbarTheme.of(context).copyWith(thumbVisibility: true),
+  child: TextDropdown<String>(items: items),
+)
+```
+
 ## 动画
 
 三种揭示动画都基于同一个进度 `p`，且都用「完整圆角外框 ∩ 可见区域」求交，

@@ -344,6 +344,15 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
   final LayerLink _layerLink = LayerLink();
   final OverlayPortalController _portal = OverlayPortalController();
 
+  /// 列表的滚动控制器。显式持有有两个用处：
+  /// 1. 列表外面那条 [Scrollbar] 必须接到同一个 controller 才画得出来
+  ///    （`SingleChildScrollView` 不传 controller 时只会去用
+  ///    `PrimaryScrollController`，桌面平台之外未必有）；
+  /// 2. 滚动条的行为不再依赖平台 / `ScrollBehavior` 的默认注入。
+  final ScrollController _listScroll = ScrollController(
+    debugLabel: 'TextDropdown.list',
+  );
+
   /// 触发器与浮层两块区域共用一个 groupId：点列表里的选项不会被
   /// `TapRegion.onTapOutside` 当成「点在外面」提前关掉。
   final Object _tapGroup = Object();
@@ -468,6 +477,7 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
 
   @override
   void dispose() {
+    _listScroll.dispose();
     _progress.dispose();
     _controller.dispose();
     _triggerFocus.dispose();
@@ -700,14 +710,11 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
       ),
       child: Material(
         type: MaterialType.transparency,
-        child: Padding(
-          padding: EdgeInsets.all(_dropdownStyle.padding),
-          child: Opacity(
-            opacity: f.rowsOpacity,
-            child: Transform.translate(
-              offset: Offset(0, f.rowsOffsetY),
-              child: _buildItems(),
-            ),
+        child: Opacity(
+          opacity: f.rowsOpacity,
+          child: Transform.translate(
+            offset: Offset(0, f.rowsOffsetY),
+            child: _buildItems(),
           ),
         ),
       ),
@@ -749,23 +756,48 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
     );
   }
 
+  /// 选项列表 + 贴着面板内边缘的滚动条。
+  ///
+  /// [Scrollbar] 刻意包在 `Padding` **外面**：它的盒子铺满整条内容区，滑块就画
+  /// 在面板内边缘上。反过来（或依赖桌面平台默认注入的那条）滑块会跟着
+  /// [DropdownStyle.padding] 往里缩；而 [DropdownStyle.itemPadding] 只影响行
+  /// 内容的缩进，跟滑块位置无关 —— 两者怎么调，滑块都紧挨着边。
+  ///
+  /// `Scrollbars: false` 关掉平台注入的那条：Windows / macOS 上 Material 的
+  /// [ScrollBehavior] 会自动给可滚动区域塞一条 [Scrollbar]，不关掉的话它会和
+  /// 这条叠在一起画（两条滑块、粗细翻倍，位置还是跟 padding 走）。
   Widget _buildItems() {
-    return ConstrainedBox(
-      constraints: BoxConstraints(
-        maxHeight: math.max(
-          0.0,
-          widget.maxPanelHeight - _dropdownStyle.padding * 2,
-        ),
-      ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          spacing: _itemGap,
-          children: <Widget>[
-            for (final TextDropdownItem<T> item in widget.items)
-              _buildItem(item),
-          ],
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      // Material 的滑块默认离边 2px（`_kScrollbarMargin`），这里压成 0：
+      // 滑块直接压在面板内边缘上。
+      child: ScrollbarTheme(
+        data: ScrollbarTheme.of(context).copyWith(crossAxisMargin: 0),
+        child: Scrollbar(
+          controller: _listScroll,
+          child: Padding(
+            padding: EdgeInsets.all(_dropdownStyle.padding),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: math.max(
+                  0.0,
+                  widget.maxPanelHeight - _dropdownStyle.padding * 2,
+                ),
+              ),
+              child: SingleChildScrollView(
+                controller: _listScroll,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: _itemGap,
+                  children: <Widget>[
+                    for (final TextDropdownItem<T> item in widget.items)
+                      _buildItem(item),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     );

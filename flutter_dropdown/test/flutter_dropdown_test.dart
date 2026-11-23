@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -9,6 +10,23 @@ Widget _wrap(Widget child, {Brightness brightness = Brightness.light}) {
     home: Scaffold(body: Center(child: child)),
   );
 }
+
+/// [TextDropdown] 面板本体的 key（组件内私有，这里按同值匹配）。
+const Key _textBodyKey = ValueKey<String>('text_dropdown_panel_body');
+
+List<TextDropdownItem<String>> _manyTextItems() => <TextDropdownItem<String>>[
+  for (int i = 0; i < 12; i++) TextDropdownItem<String>('$i', label: 'Item $i'),
+];
+
+List<AnchoredDropdownItem<int>> _manyAnchoredItems() =>
+    <AnchoredDropdownItem<int>>[
+      for (int i = 0; i < 12; i++)
+        AnchoredDropdownItem<int>(i, label: 'Item $i'),
+    ];
+
+/// 列表外面那条滚动条的矩形。
+Rect _scrollbarRect(WidgetTester tester) =>
+    tester.getRect(find.byType(Scrollbar));
 
 void main() {
   group('TextDropdown', () {
@@ -212,6 +230,138 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
       expect(find.byKey(const ValueKey<String>('custom')), findsOneWidget);
+    });
+  });
+
+  group('滚动条', () {
+    testWidgets('TextDropdown：滚动条贴着面板右边缘，不受 padding / itemPadding 影响', (
+      tester,
+    ) async {
+      const Key dropdownKey = ValueKey<String>('dd');
+
+      await tester.pumpWidget(
+        _wrap(
+          TextDropdown<String>(
+            key: dropdownKey,
+            items: _manyTextItems(),
+            maxPanelHeight: 120,
+            style: DropdownStyle.light().copyWith(
+              padding: 4,
+              itemPadding: const EdgeInsets.symmetric(horizontal: 10),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(dropdownKey));
+      await tester.pumpAndSettle();
+
+      final Rect body = tester.getRect(find.byKey(_textBodyKey));
+      final Rect bar = _scrollbarRect(tester);
+      final Rect view = tester.getRect(find.byType(SingleChildScrollView));
+
+      expect(bar.right, closeTo(body.right, 0.01), reason: '滑块贴右边缘');
+      expect(bar.width, closeTo(body.width, 0.01), reason: '滚动条层铺满内容区');
+      expect(
+        view.right,
+        closeTo(body.right - 4, 0.01),
+        reason: '列表本体仍按 padding 内缩，滚动条不被它推走',
+      );
+
+      // 把两层内边距都放大：行往里缩，滚动条位置不变。
+      // key 相同 → State 复用，面板仍然开着，不用再点一次。
+      await tester.pumpWidget(
+        _wrap(
+          TextDropdown<String>(
+            key: dropdownKey,
+            items: _manyTextItems(),
+            maxPanelHeight: 120,
+            style: DropdownStyle.light().copyWith(
+              padding: 12,
+              itemPadding: const EdgeInsets.symmetric(horizontal: 30),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final Rect body2 = tester.getRect(find.byKey(_textBodyKey));
+      final Rect bar2 = _scrollbarRect(tester);
+      expect(bar2.right, closeTo(body2.right, 0.01));
+      expect(bar2.width, closeTo(body2.width, 0.01));
+      expect(
+        tester.getRect(find.byType(SingleChildScrollView)).right,
+        closeTo(body2.right - 12, 0.01),
+        reason: '只有列表本体跟着 padding 走',
+      );
+    });
+
+    testWidgets('AnchoredDropdown：滚动条同样贴边，与 padding 无关', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          AnchoredDropdown<int>(
+            trigger: const Text('open'),
+            items: _manyAnchoredItems(),
+            maxMenuHeight: 120,
+            style: DropdownStyle.light().copyWith(
+              padding: 12,
+              itemPadding: const EdgeInsets.symmetric(horizontal: 24),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      final Rect body = tester.getRect(find.byKey(kDropdownBodyKey));
+      final Rect bar = _scrollbarRect(tester);
+      expect(bar.right, closeTo(body.right, 0.01));
+      expect(bar.width, closeTo(body.width, 0.01));
+      expect(
+        tester.getRect(find.byType(SingleChildScrollView)).right,
+        closeTo(body.right - 12, 0.01),
+      );
+    });
+
+    testWidgets('桌面平台只画这一条，不会跟平台注入的叠成两条', (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+
+      await tester.pumpWidget(
+        _wrap(
+          TextDropdown<String>(items: _manyTextItems(), maxPanelHeight: 120),
+        ),
+      );
+      await tester.tap(find.byType(TextDropdown<String>));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(Scrollbar), findsOneWidget);
+
+      final Rect body = tester.getRect(find.byKey(_textBodyKey));
+      expect(_scrollbarRect(tester).right, closeTo(body.right, 0.01));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('列表能滚动（滚动条接的是同一个 controller）', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          TextDropdown<String>(items: _manyTextItems(), maxPanelHeight: 120),
+        ),
+      );
+      await tester.tap(find.byType(TextDropdown<String>));
+      await tester.pumpAndSettle();
+
+      final Finder scrollable = find.descendant(
+        of: find.byType(Scrollbar),
+        matching: find.byType(Scrollable),
+      );
+      expect(scrollable, findsOneWidget);
+      final ScrollableState state = tester.state<ScrollableState>(scrollable);
+      expect(state.position.maxScrollExtent, greaterThan(0));
+
+      await tester.drag(find.text('Item 2'), const Offset(0, -60));
+      await tester.pumpAndSettle();
+      expect(state.position.pixels, greaterThan(0));
+      expect(tester.takeException(), isNull);
     });
   });
 

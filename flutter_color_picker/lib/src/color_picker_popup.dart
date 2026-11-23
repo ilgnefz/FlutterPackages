@@ -96,6 +96,7 @@ ColorPickerPopup showColorPicker(
   double gap = 6,
   Color? panelColor,
   bool showHexField = true,
+  bool showOpacity = false,
   ColorHexFormat hexFormat = ColorHexFormat.hashRgb,
 }) {
   final OverlayState? overlay = Overlay.maybeOf(context, rootOverlay: true);
@@ -133,6 +134,7 @@ ColorPickerPopup showColorPicker(
       panelRadius: panelRadius,
       panelColor: panelColor,
       showHexField: showHexField,
+      showOpacity: showOpacity,
       hexFormat: hexFormat,
       onChanged: onChanged,
       onChangeEnd: onChangeEnd,
@@ -184,6 +186,7 @@ class _PopupHost extends StatefulWidget {
     required this.panelPadding,
     required this.panelRadius,
     required this.showHexField,
+    required this.showOpacity,
     required this.hexFormat,
     required this.onClosed,
     this.panelColor,
@@ -202,6 +205,7 @@ class _PopupHost extends StatefulWidget {
   final double panelRadius;
   final Color? panelColor;
   final bool showHexField;
+  final bool showOpacity;
   final ColorHexFormat hexFormat;
   final ValueChanged<int>? onChanged;
   final ValueChanged<int>? onChangeEnd;
@@ -303,6 +307,7 @@ class _PopupHostState extends State<_PopupHost>
         initialColor: widget.color,
         width: widget.panelWidth,
         showHexField: widget.showHexField,
+        showOpacity: widget.showOpacity,
         hexFormat: widget.hexFormat,
         onChanged: widget.onChanged,
         onChangeEnd: widget.onChangeEnd,

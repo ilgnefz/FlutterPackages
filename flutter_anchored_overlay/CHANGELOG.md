@@ -1,3 +1,10 @@
+## 未发布
+
+* `Popover` 新增顶层 `padding`，用于设置气泡内容与边框的内边距（覆盖
+  `PopoverStyle.padding`）；补充文档说明它与 `edgePadding`（视口边距）的区别。
+* 气泡内容按 `PopoverShapeBorder` 轮廓裁剪，带方角背景 / 图片的 content 不再
+  露出圆角外；箭头与阴影保持原样。
+
 ## 0.0.1
 
 * 从 `once_power/lib/widget/base/anchored_overlay` 迁移为独立包

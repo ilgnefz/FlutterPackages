@@ -1,3 +1,15 @@
+## 1.0.3
+
+* 列表右侧的滚动条改成**贴着面板内边缘**：`Scrollbar` 现在包在
+  `DropdownStyle.padding` 外面，盒子铺满整条内容区，滑块不再跟着内边距往里缩；
+  行的 `itemPadding` 本来就只影响行内容，两层内边距怎么调都不影响滑块位置。
+  `crossAxisMargin` 固定为 0（Material 默认留 2px 缝）。
+* 列表改用显式 `ScrollController`：滚动条不再依赖桌面平台自动注入的那条，
+  各平台表现一致；自动注入的那条已关掉，不会叠成两条。
+* `AnchoredDropdown` 用 `menuBuilder` 自定义内容时行为不变（滚动由调用方负责）。
+* 新增 4 条测试：两个门面的滑块贴边与内边距无关、桌面平台只有一条、
+  配了 controller 后列表确实能滚。
+
 ## 1.0.2
 
 * `DropdownStyle` 新增 `itemPadding`（默认水平 10）：控制下拉栏选项里文字 /

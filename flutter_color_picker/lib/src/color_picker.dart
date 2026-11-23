@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'checker.dart';
 import 'hex.dart';
 
 // ── 尺寸常量 ──────────────────────────────────────────────────────────────
@@ -36,11 +37,18 @@ const double _kFieldRadius = 10;
 /// 底行高度 = 预览圆直径 = 输入框高度。
 const double _kFooterHeight = _kPreviewSize;
 
+/// 底行里透明度读数（`100%`）占的宽度。
+///
+/// 固定宽度 + 等宽数字：0% / 100% 切换时输入框不会跟着左右抖。
+const double _kAlphaLabelWidth = 38;
+
 // ── 测试用 key（同值匹配，不必导出） ────────────────────────────────────
 
 const Key _satValKey = ValueKey<String>('color-picker-sat-val');
 const Key _hueKey = ValueKey<String>('color-picker-hue');
+const Key _alphaKey = ValueKey<String>('color-picker-alpha');
 const Key _hexKey = ValueKey<String>('color-picker-hex');
+const Key _alphaLabelKey = ValueKey<String>('color-picker-alpha-label');
 const Key _previewKey = ValueKey<String>('color-picker-preview');
 
 /// 取颜色里色相条上的七个停靠色（红 → 黄 → 绿 → 青 → 蓝 → 洋红 → 红）。
@@ -88,8 +96,23 @@ final List<Color> _hueStops = <Color>[
 /// 回车或失焦时解析，非法输入恢复成当前颜色。输入过程中不会被拖动 / 外部
 /// 赋值覆盖（正在输入的文本优先）。
 ///
+/// 聚焦时整体选中框里的文本：点进去直接打字就是整段替换，不用先全删。
+///
 /// 显示格式由 [hexFormat] 决定：默认 `#RRGGBB`；要粘进 Flutter 代码就传
 /// [ColorHexFormat.flutterArgb]，显示成 `0xFFRRGGBB`。
+///
+/// ## 透明度
+///
+/// 默认不处理透明度（只画不透明色）。传 `showOpacity: true` 才多出一条透明度
+/// 条，输入框右边同时显示百分比：
+///
+/// * 拖动透明度条即时改 alpha，`onChanged` 给的就是 `0xAARRGGBB`（带上 alpha）；
+/// * hex 文本跟着变成带 alpha 的写法（`#RRGGBBAA` / `0xAARRGGBB`），所以粘进
+///   代码或者存配置时透明度不会丢；
+/// * 输入框里写八位 hex 也能改透明度。
+///
+/// `showOpacity: false` 时这些都不存在：八位 hex 里的 alpha 会被丢掉、按不透明
+/// 处理，等于输入框也控制不了透明度。
 class ColorPicker extends StatefulWidget {
   const ColorPicker({
     super.key,
@@ -99,6 +122,7 @@ class ColorPicker extends StatefulWidget {
     this.onChangeEnd,
     this.width = 260,
     this.showHexField = true,
+    this.showOpacity = false,
     this.hexFormat = ColorHexFormat.hashRgb,
     this.mouseCursor,
     this.enabled = true,
@@ -131,6 +155,17 @@ class ColorPicker extends StatefulWidget {
   /// 是否显示底部一行（当前色圆点 + hex 输入框）。
   final bool showHexField;
 
+  /// 是否显示透明度控制（色相条下的透明度条 + 输入框右侧的百分比）。
+  ///
+  /// 默认 `false`：面板只处理不透明色。此时输入框里写八位 hex
+  /// （`#RRGGBBAA` / `0xAARRGGBB`）也会被当成不透明，等于连输入框都改不了
+  /// 透明度。
+  ///
+  /// 传 `true`：多出一条透明度条（棋盘格 + 「透明 → 当前色」渐变），可拖；
+  /// 输入框右侧显示百分比；hex 文本变成带 alpha 的写法（`#RRGGBBAA` /
+  /// `0xAARRGGBB`），输入八位写法同样能改透明度。
+  final bool showOpacity;
+
   /// hex 的显示格式；输入时两种写法都认。
   ///
   /// 要直接粘进 `Color(...)` 就用 [ColorHexFormat.flutterArgb]
@@ -150,7 +185,11 @@ class ColorPicker extends StatefulWidget {
 class _ColorPickerState extends State<ColorPicker> {
   late HSVColor _hsv = HSVColor.fromColor(widget.value ?? widget.initialColor);
   late final TextEditingController _hex = TextEditingController(
-    text: colorToHex(_hsv.toColor(), format: widget.hexFormat),
+    text: colorToHex(
+      _hsv.toColor(),
+      format: widget.hexFormat,
+      includeAlpha: widget.showOpacity,
+    ),
   );
   final FocusNode _hexFocus = FocusNode(debugLabel: 'ColorPicker.hex');
 
@@ -158,6 +197,9 @@ class _ColorPickerState extends State<ColorPicker> {
 
   /// 对外回传的整数：`0xAARRGGBB`，和 `Color(0xFF2B7FFF)` 里的数一致。
   int get _argb => _color.toARGB32();
+
+  /// 当前不透明度 0~1（`showOpacity` 关掉时恒为颜色自带的 alpha）。
+  double get _alpha => _hsv.alpha;
 
   @override
   void initState() {
@@ -168,8 +210,11 @@ class _ColorPickerState extends State<ColorPicker> {
   @override
   void didUpdateWidget(covariant ColorPicker oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // 换了显示格式：把当前色按新写法重写进输入框。
-    if (widget.hexFormat != oldWidget.hexFormat) _syncHexText(force: true);
+    // 换了显示格式 / 开关了透明度：把当前色按新写法重写进输入框。
+    if (widget.hexFormat != oldWidget.hexFormat ||
+        widget.showOpacity != oldWidget.showOpacity) {
+      _syncHexText(force: true);
+    }
     final Color? value = widget.value;
     if (value == null || value == oldWidget.value) return;
     // 自己刚发出去的色值原样回来：不重算，免得把 hue 弄丢。
@@ -229,6 +274,12 @@ class _ColorPickerState extends State<ColorPicker> {
     _setHsv(_hsv.withHue((t * 360).clamp(0.0, 359.9)));
   }
 
+  void _updateAlpha(Offset local) {
+    if (!widget.showOpacity) return;
+    final double t = (local.dx / widget.width).clamp(0.0, 1.0);
+    _setHsv(_hsv.withAlpha(t));
+  }
+
   // ── hex 输入 ────────────────────────────────────────────────────────────
 
   /// 把当前颜色写回输入框。
@@ -237,7 +288,11 @@ class _ColorPickerState extends State<ColorPicker> {
   /// 打到一半的 `#2B7` 也被改掉。
   void _syncHexText({bool force = false}) {
     if (!force && _hexFocus.hasFocus) return;
-    final String text = colorToHex(_color, format: widget.hexFormat);
+    final String text = colorToHex(
+      _color,
+      format: widget.hexFormat,
+      includeAlpha: widget.showOpacity,
+    );
     if (_hex.text == text) return;
     _hex.value = TextEditingValue(
       text: text,
@@ -246,12 +301,33 @@ class _ColorPickerState extends State<ColorPicker> {
   }
 
   void _handleHexFocusChange() {
+    if (_hexFocus.hasFocus) {
+      // 聚焦即全选：点进去直接打字就是整段替换。
+      _selectAllHex();
+      // 点进输入框时，光标 / 选区是在这次点击里**后面**才落位的，会盖掉上面
+      // 那次全选；等这一帧画完再选一次，保证「聚焦就选中全部」。之后再点就
+      // 是正常摆光标了（那时焦点没变，不会重复全选）。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _hexFocus.hasFocus) _selectAllHex();
+      });
+      return;
+    }
     // 失焦即提交；没改过则 _submitHex 内部自己跳过。
-    if (!_hexFocus.hasFocus) _submitHex(_hex.text);
+    _submitHex(_hex.text);
+  }
+
+  void _selectAllHex() {
+    if (_hex.text.isEmpty) return;
+    _hex.selection = TextSelection(
+      baseOffset: 0,
+      extentOffset: _hex.text.length,
+    );
   }
 
   void _submitHex(String raw) {
-    final Color? parsed = parseHexColor(raw);
+    // showOpacity 关掉时不读 alpha：八位写法里的透明度在这里就被丢掉，等于
+    // 连输入框都改不了透明度。
+    final Color? parsed = parseHexColor(raw, includeAlpha: widget.showOpacity);
     if (parsed == null) {
       _syncHexText(force: true); // 非法输入：恢复成当前颜色
       return;
@@ -282,6 +358,10 @@ class _ColorPickerState extends State<ColorPicker> {
           _withCursor(_buildSatVal(panelHeight)),
           const SizedBox(height: _kRowGap),
           _withCursor(_buildHueBar()),
+          if (widget.showOpacity) ...<Widget>[
+            const SizedBox(height: _kRowGap),
+            _withCursor(_buildAlphaBar()),
+          ],
           if (widget.showHexField) ...<Widget>[
             const SizedBox(height: _kRowGap),
             _buildFooter(scheme),
@@ -401,6 +481,60 @@ class _ColorPickerState extends State<ColorPicker> {
     );
   }
 
+  /// 透明度条：棋盘格底 + 「全透明 → 当前色」渐变，滑块横坐标就是 alpha。
+  ///
+  /// 棋盘格不是装饰：同样一串「越来越浓」的渐变铺在白底上，只是看起来变淡；
+  /// 压在格子上才有「透出后面的背景」的直觉。
+  Widget _buildAlphaBar() {
+    final Color opaque = _hsv.withAlpha(1).toColor();
+    final double cx = (_alpha * widget.width).clamp(
+      _kThumbRadius,
+      widget.width - _kThumbRadius,
+    );
+
+    return _PointerDragArea(
+      key: _alphaKey,
+      enabled: widget.enabled,
+      onUpdate: _updateAlpha,
+      onEnd: _endChange,
+      child: SizedBox(
+        width: widget.width,
+        height: _kHueRowHeight,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: <Widget>[
+            Center(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(_kHueBarHeight / 2),
+                child: SizedBox(
+                  height: _kHueBarHeight,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      const CheckerPattern(square: 4),
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: <Color>[opaque.withAlpha(0), opaque],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: cx - _kThumbRadius,
+              top: (_kHueRowHeight - _kThumbRadius * 2) / 2,
+              child: _buildThumb(Colors.transparent),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// 指针 / 滑块：白描边的空心圆。
   ///
   /// 内部留透明而不是填色：压在渐变上时会直接透出下面的颜色，圆环里就是它
@@ -424,24 +558,14 @@ class _ColorPickerState extends State<ColorPicker> {
     );
   }
 
-  /// 底行：左边当前色圆点，右边 hex 输入框。
+  /// 底行：左边当前色圆点，中间 hex 输入框，右边透明度读数（开关打开时）。
   Widget _buildFooter(ColorScheme scheme) {
     final Color field = scheme.onSurface.withAlpha(18);
     return SizedBox(
       height: _kFooterHeight,
       child: Row(
         children: <Widget>[
-          Container(
-            key: _previewKey,
-            width: _kPreviewSize,
-            height: _kPreviewSize,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _color,
-              // 描边用中性色：白色不透明时圆点和白底分不清，深色时不会脏。
-              border: Border.all(color: scheme.onSurface.withAlpha(26)),
-            ),
-          ),
+          _buildPreview(scheme),
           const SizedBox(width: 12),
           Expanded(
             child: TextField(
@@ -468,8 +592,10 @@ class _ColorPickerState extends State<ColorPicker> {
                 filled: true,
                 fillColor: field,
                 hintText: switch (widget.hexFormat) {
-                  ColorHexFormat.hashRgb => '#RRGGBB',
-                  ColorHexFormat.flutterArgb => '0xFFRRGGBB',
+                  ColorHexFormat.hashRgb =>
+                    widget.showOpacity ? '#RRGGBBAA' : '#RRGGBB',
+                  ColorHexFormat.flutterArgb =>
+                    widget.showOpacity ? '0xAARRGGBB' : '0xFFRRGGBB',
                 },
                 hintStyle: TextStyle(
                   fontSize: 14,
@@ -500,7 +626,56 @@ class _ColorPickerState extends State<ColorPicker> {
               },
             ),
           ),
+          if (widget.showOpacity) ...<Widget>[
+            const SizedBox(width: 8),
+            _buildAlphaLabel(scheme),
+          ],
         ],
+      ),
+    );
+  }
+
+  /// 当前色圆点：底下垫一层棋盘格，半透明时才看得出「透了多少」。
+  ///
+  /// 描边用中性色：白色不透明时圆点和白底分不清，深色时不会脏。
+  Widget _buildPreview(ColorScheme scheme) {
+    return SizedBox(
+      width: _kPreviewSize,
+      height: _kPreviewSize,
+      child: Stack(
+        fit: StackFit.expand,
+        children: <Widget>[
+          ClipOval(child: const CheckerPattern()),
+          Container(
+            key: _previewKey,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _color,
+              border: Border.all(color: scheme.onSurface.withAlpha(26)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 输入框右边的透明度读数（`100%`）。
+  ///
+  /// 只读：改透明度用上面的透明度条或 hex 输入，这里只管把数值摊开给人看。
+  Widget _buildAlphaLabel(ColorScheme scheme) {
+    return SizedBox(
+      width: _kAlphaLabelWidth,
+      child: Text(
+        '${(_alpha * 100).round()}%',
+        key: _alphaLabelKey,
+        maxLines: 1,
+        textAlign: TextAlign.right,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: scheme.onSurface.withAlpha(160),
+          fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
+        ),
       ),
     );
   }

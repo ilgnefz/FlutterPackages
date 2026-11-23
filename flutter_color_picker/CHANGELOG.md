@@ -1,3 +1,17 @@
+## 未发布
+
+* **透明度**：新增 `ColorPicker.showOpacity`（默认 `false`，行为不变）。
+  打开后色相条下面多一条透明度条（棋盘格 + 「全透明 → 当前色」渐变），
+  hex 输入框右侧显示百分比读数；hex 文本变成带 alpha 的写法
+  （`#RRGGBBAA` / `0xAARRGGBB`），输入八位写法也能改透明度。
+  `showOpacity: false` 时不画透明度条、输入框里的 alpha 也被丢掉，没有任何
+  入口能改透明度。当前色圆点垫上棋盘格，半透明时能看出透了多少。
+* `ColorPickerButton` / `showColorPicker` 同步新增 `showOpacity`。
+* **hex 输入框聚焦时整体选中**：点进去直接打字就是整段替换；已聚焦后再点
+  一次是正常摆光标。
+* `colorToHex` / `parseHexColor` 新增 `includeAlpha` 参数（默认 `false`，
+  保持原来的「丢掉 alpha」行为）。
+
 ## 0.0.1
 
 * 从 `color_picker` 迁移为 `flutter_color_picker`，入口改为

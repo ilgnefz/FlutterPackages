@@ -383,12 +383,18 @@ class _PopoverBubble extends StatelessWidget {
                   ),
                 ],
               ),
-              child: _SizeReporter(
-                onSize: onSize,
-                child: Padding(
-                  key: kPopoverContentKey,
-                  padding: style.padding.add(arrowPadding),
-                  child: child,
+              // 内容按气泡轮廓（圆角 + 箭头）裁剪：内容的背景 / 图片如果是
+              // 方角，会露到气泡圆角外面。阴影由上面的 ShapeDecoration 画，
+              // 不能一起裁掉，所以 ClipPath 只包 child。
+              child: ClipPath(
+                clipper: _ShapeClipPath(shape: shape),
+                child: _SizeReporter(
+                  onSize: onSize,
+                  child: Padding(
+                    key: kPopoverContentKey,
+                    padding: style.padding.add(arrowPadding),
+                    child: child,
+                  ),
                 ),
               ),
             ),
@@ -397,6 +403,19 @@ class _PopoverBubble extends StatelessWidget {
       ),
     );
   }
+}
+
+/// 按气泡实际轮廓裁剪内容，避免内容的方角背景露出圆角外。
+class _ShapeClipPath extends CustomClipper<Path> {
+  const _ShapeClipPath({required this.shape});
+
+  final ShapeBorder shape;
+
+  @override
+  Path getClip(Size size) => shape.getOuterPath(Offset.zero & size);
+
+  @override
+  bool shouldReclip(_ShapeClipPath oldClipper) => shape != oldClipper.shape;
 }
 
 // ── 尺寸上报 ──────────────────────────────────────────────────────────────

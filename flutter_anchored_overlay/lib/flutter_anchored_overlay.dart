@@ -95,6 +95,7 @@ class Popover extends StatefulWidget {
     this.enabled = true,
     this.reduceMotion = false,
     this.style = const PopoverStyle(),
+    this.padding,
     this.edgePadding = 8.0,
     this.semanticsLabel,
     this.semanticsTooltip,
@@ -143,6 +144,12 @@ class Popover extends StatefulWidget {
   /// 把气泡整体夹取到视口内（留 [edgePadding] 边距）。
   final bool constrainToViewport;
 
+  /// 气泡内容与边框之间的内边距；非 null 时覆盖 [PopoverStyle.padding]。
+  ///
+  /// [edgePadding] 是气泡与**视口边缘**的留白，只在贴边夹取和最大宽度计算里
+  /// 起作用，气泡摆在屏幕中间时改它看不出变化。想改气泡内部的留白用这个。
+  final EdgeInsetsGeometry? padding;
+
   /// 打开方式：点击 / 悬停 / 纯控制器。
   final PopoverTriggerMode triggerMode;
 
@@ -175,7 +182,11 @@ class Popover extends StatefulWidget {
   /// 外观配置。
   final PopoverStyle style;
 
-  /// 气泡贴到视口边缘时保留的最小留白。
+  /// 气泡贴到视口边缘时保留的最小留白（**视口边距，不是内容内边距**）。
+  ///
+  /// 只在气泡会被夹回视口、以及计算最大宽度时起作用；气泡在屏幕中间时改它
+  /// 看不到效果。要改内容与气泡边框的间距请用 [padding] 或
+  /// [PopoverStyle.padding]。
   final double edgePadding;
 
   /// 触发器的无障碍标签；为 null 时不覆盖子组件自带语义。
@@ -680,6 +691,11 @@ class _PopoverState extends State<Popover>
                   )
                 : frame;
             final double maxWidth = _maxWidth();
+            // 顶层 padding 是 style.padding 的便捷写法：只覆盖内边距，
+            // 其余外观（箭头、圆角、动画等）继续用调用方给的 style。
+            final PopoverStyle style = widget.padding == null
+                ? widget.style
+                : widget.style.copyWith(padding: widget.padding);
             return Positioned.fill(
               child: Stack(
                 children: <Widget>[
@@ -717,7 +733,7 @@ class _PopoverState extends State<Popover>
                               ),
                               child: _PopoverBubble(
                                 frame: visibleFrame,
-                                style: widget.style,
+                                style: style,
                                 position: position,
                                 onSize: _onPopupSize,
                                 child: widget.contentBuilder?.call(context) ??

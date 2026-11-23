@@ -1,5 +1,5 @@
-/// 颜色选择面板：饱和度-明度方块 + 色相条 + 当前色 + hex 输入，
-/// 另带「点色块弹出面板」的组合和命令式弹出。
+/// 颜色选择面板：饱和度-明度方块 + 色相条 +（可选）透明度条 + 当前色 + hex
+/// 输入，另带「点色块弹出面板」的组合和命令式弹出。
 ///
 /// **传进来用 `Color`，回调出去是 `int`**：`onChanged` / `onChangeEnd` 的参数
 /// 都是 `0xAARRGGBB`（代码里写 `Color(0xFF2B7FFF)` 的那个数，等价
@@ -12,6 +12,7 @@
 /// // 1) 直接嵌在布局里
 /// ColorPicker(
 ///   value: Color(_argb),
+///   showOpacity: true,                          // 需要调透明度就打开
 ///   onChanged: (int argb) => setState(() => _argb = argb),
 ///   onChangeEnd: (int argb) => save(argb),      // 松手 / 提交时一次
 /// );

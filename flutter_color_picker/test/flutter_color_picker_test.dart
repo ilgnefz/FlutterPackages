@@ -5,7 +5,9 @@ import 'package:material_ui/material_ui.dart';
 
 const Key _satValKey = ValueKey<String>('color-picker-sat-val');
 const Key _hueKey = ValueKey<String>('color-picker-hue');
+const Key _alphaKey = ValueKey<String>('color-picker-alpha');
 const Key _hexKey = ValueKey<String>('color-picker-hex');
+const Key _alphaLabelKey = ValueKey<String>('color-picker-alpha-label');
 const Key _previewKey = ValueKey<String>('color-picker-preview');
 
 /// 面板里当前的色值（直接读左下角预览圆点的填充）。
@@ -19,6 +21,16 @@ String _hexText(WidgetTester tester) {
   final TextField field = tester.widget<TextField>(find.byKey(_hexKey));
   return field.controller!.text;
 }
+
+/// 输入框里的选区。
+TextSelection _hexSelection(WidgetTester tester) {
+  final TextField field = tester.widget<TextField>(find.byKey(_hexKey));
+  return field.controller!.selection;
+}
+
+/// 输入框右边那个透明度读数。
+String _alphaText(WidgetTester tester) =>
+    tester.widget<Text>(find.byKey(_alphaLabelKey)).data!;
 
 Rect _rectOf(WidgetTester tester, Key key) => tester.getRect(find.byKey(key));
 
@@ -667,5 +679,255 @@ void main() {
     expect(quick.isOpen, isFalse);
     expect(popup.isOpen, isFalse, reason: '开新的会先收掉旧的');
     expect(tester.takeException(), isNull);
+  });
+
+  // ── 透明度 ──────────────────────────────────────────────────────────────
+
+  testWidgets('默认不显示透明度：没有透明度条、没有百分比，hex 不带 alpha', (tester) async {
+    await tester.pumpWidget(_host(const ColorPicker()));
+
+    expect(find.byKey(_alphaKey), findsNothing);
+    expect(find.byKey(_alphaLabelKey), findsNothing);
+    expect(_hexText(tester), '#2B7FFF');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('showOpacity：显示透明度条与百分比，拖到最左变全透明', (tester) async {
+    final List<int> changing = <int>[];
+    final List<int> ended = <int>[];
+    await tester.pumpWidget(
+      _host(
+        ColorPicker(
+          showOpacity: true,
+          value: const Color(0xFF2B7FFF),
+          onChanged: changing.add,
+          onChangeEnd: ended.add,
+        ),
+      ),
+    );
+
+    expect(find.byKey(_alphaKey), findsOneWidget);
+    expect(_alphaText(tester), '100%', reason: '初始不透明');
+    expect(_hexText(tester), '#2B7FFFFF', reason: 'hex 里也带 alpha');
+
+    final Rect bar = _rectOf(tester, _alphaKey);
+    final TestGesture gesture = await tester.startGesture(
+      bar.centerLeft + const Offset(0.5, 0),
+    );
+    await tester.pump();
+
+    expect(_currentColor(tester), const Color(0x002B7FFF), reason: 'alpha 归零');
+    expect(_alphaText(tester), '0%');
+    expect(_hexText(tester), '#2B7FFF00');
+    expect(changing.last, 0x002B7FFF, reason: '回调带着 alpha 出去');
+    expect(ended, isEmpty, reason: '松手前不该发 onChangeEnd');
+
+    await gesture.moveTo(bar.center);
+    await tester.pump();
+    expect(_alphaText(tester), '50%');
+    expect(changing.last, 0x802B7FFF);
+
+    await gesture.up();
+    await tester.pump();
+    expect(ended.last, 0x802B7FFF);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('showOpacity: false 时输入框也改不了透明度（八位 alpha 被丢掉）', (tester) async {
+    final List<int> ended = <int>[];
+    await tester.pumpWidget(_host(ColorPicker(onChangeEnd: ended.add)));
+
+    await tester.enterText(find.byKey(_hexKey), '#00FF0080');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(_currentColor(tester), const Color(0xFF00FF00));
+    expect(_hexText(tester), '#00FF00');
+    expect(ended.last, 0xFF00FF00);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('showOpacity: true 时八位 hex 输入能改透明度', (tester) async {
+    final List<int> ended = <int>[];
+    await tester.pumpWidget(
+      _host(ColorPicker(showOpacity: true, onChangeEnd: ended.add)),
+    );
+
+    await tester.enterText(find.byKey(_hexKey), '#00FF0080');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+
+    expect(_currentColor(tester), const Color(0x8000FF00));
+    expect(_alphaText(tester), '50%');
+    expect(_hexText(tester), '#00FF0080');
+    expect(ended.last, 0x8000FF00);
+
+    // 六位写法（没写 alpha）照旧按不透明处理。
+    await tester.enterText(find.byKey(_hexKey), '#00FF00');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pump();
+    expect(_currentColor(tester), const Color(0xFF00FF00));
+    expect(_alphaText(tester), '100%');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('showOpacity 与 hexFormat.flutterArgb：显示 0xAARRGGBB', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(
+        ColorPicker(
+          showOpacity: true,
+          hexFormat: ColorHexFormat.flutterArgb,
+          initialColor: const Color(0x802B7FFF),
+        ),
+      ),
+    );
+    expect(_hexText(tester), '0x802B7FFF');
+    expect(_alphaText(tester), '50%');
+    expect(_currentColor(tester), const Color(0x802B7FFF), reason: '预览也半透明');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('外部换 value 时透明度也跟着变', (tester) async {
+    await tester.pumpWidget(
+      _host(const ColorPicker(showOpacity: true, value: Color(0xFF2B7FFF))),
+    );
+    expect(_alphaText(tester), '100%');
+
+    await tester.pumpWidget(
+      _host(const ColorPicker(showOpacity: true, value: Color(0x332B7FFF))),
+    );
+    await tester.pump();
+    expect(_alphaText(tester), '20%');
+    expect(_hexText(tester), '#2B7FFF33');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('开关 showOpacity 后输入框按新写法重写', (tester) async {
+    await tester.pumpWidget(_host(const ColorPicker()));
+    expect(_hexText(tester), '#2B7FFF');
+
+    await tester.pumpWidget(_host(const ColorPicker(showOpacity: true)));
+    await tester.pump();
+    expect(_hexText(tester), '#2B7FFFFF');
+    expect(find.byKey(_alphaKey), findsOneWidget);
+
+    await tester.pumpWidget(_host(const ColorPicker()));
+    await tester.pump();
+    expect(_hexText(tester), '#2B7FFF');
+    expect(find.byKey(_alphaKey), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('ColorPickerButton / showColorPicker 也能透出透明度条', (tester) async {
+    await tester.pumpWidget(_host(const ColorPickerButton(showOpacity: true)));
+    await tester.tap(find.byType(ColorPickerButton));
+    await tester.pumpAndSettle();
+    expect(find.byKey(_alphaKey), findsOneWidget);
+    expect(_alphaText(tester), '100%');
+    await tester.tapAt(const Offset(4, 4));
+    await tester.pumpAndSettle();
+
+    BuildContext? anchorContext;
+    final List<int> changed = <int>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (BuildContext context) {
+              anchorContext = context;
+              return const SizedBox.expand();
+            },
+          ),
+        ),
+      ),
+    );
+    showColorPicker(anchorContext!, showOpacity: true, onChanged: changed.add);
+    await tester.pumpAndSettle();
+    expect(find.byKey(_alphaKey), findsOneWidget);
+
+    final Rect bar = _rectOf(tester, _alphaKey);
+    await tester.tapAt(bar.center);
+    await tester.pumpAndSettle();
+    expect(changed.last, 0x802B7FFF);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('禁用的面板不响应透明度条', (tester) async {
+    final List<int> changed = <int>[];
+    await tester.pumpWidget(
+      _host(
+        ColorPicker(showOpacity: true, enabled: false, onChanged: changed.add),
+      ),
+    );
+    await tester.tapAt(_rectOf(tester, _alphaKey).center);
+    await tester.pump();
+    expect(changed, isEmpty);
+    expect(_alphaText(tester), '100%');
+    expect(tester.takeException(), isNull);
+  });
+
+  // ── 输入框聚焦全选 ──────────────────────────────────────────────────────
+
+  testWidgets('输入框聚焦时全选内容，再点一次是正常摆光标', (tester) async {
+    await tester.pumpWidget(_host(const ColorPicker()));
+    expect(_hexSelection(tester).isCollapsed, isTrue, reason: '没聚焦时不选');
+
+    await tester.tap(find.byKey(_hexKey));
+    await tester.pumpAndSettle();
+    final TextSelection selected = _hexSelection(tester);
+    expect(selected.baseOffset, 0);
+    expect(selected.extentOffset, _hexText(tester).length, reason: '整段选中');
+
+    // 已经聚焦后（过了双击判定窗口）再点：正常落光标，不然没法改中间某一位。
+    await tester.pump(const Duration(seconds: 1));
+    await tester.tap(find.byKey(_hexKey));
+    await tester.pumpAndSettle();
+    expect(_hexSelection(tester).isCollapsed, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  test('colorToHex / parseHexColor 的 includeAlpha', () {
+    expect(
+      colorToHex(const Color(0x802B7FFF), includeAlpha: true),
+      '#2B7FFF80',
+    );
+    expect(
+      colorToHex(
+        const Color(0x802B7FFF),
+        includeAlpha: true,
+        format: ColorHexFormat.flutterArgb,
+      ),
+      '0x802B7FFF',
+    );
+    expect(
+      colorToHex(const Color(0x802B7FFF), format: ColorHexFormat.flutterArgb),
+      '0xFF2B7FFF',
+      reason: '不带 alpha 时仍是 0xFF 开头',
+    );
+
+    expect(
+      parseHexColor('#2B7FFF80', includeAlpha: true),
+      const Color(0x802B7FFF),
+    );
+    expect(
+      parseHexColor('0x802B7FFF', includeAlpha: true),
+      const Color(0x802B7FFF),
+    );
+    expect(
+      parseHexColor('#2B7FFF80'),
+      const Color(0xFF2B7FFF),
+      reason: '默认丢掉 alpha',
+    );
+    expect(
+      parseHexColor('#2B7FFF', includeAlpha: true),
+      const Color(0xFF2B7FFF),
+      reason: '六位写法本身不带 alpha',
+    );
+    expect(
+      parseHexColor('#2B7FFF80', includeAlpha: true)!.a,
+      closeTo(0.502, 0.01),
+    );
   });
 }

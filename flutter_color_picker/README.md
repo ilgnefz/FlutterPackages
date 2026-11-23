@@ -1,7 +1,7 @@
 # flutter_color_picker
 
-Material 风格的颜色选择器：饱和度-明度方块 + 色相条 + 当前色 + hex 输入，
-另带「点色块弹出面板」的组合和命令式弹出。
+Material 风格的颜色选择器：饱和度-明度方块 + 色相条 +（可选）透明度条 +
+当前色 + hex 输入，另带「点色块弹出面板」的组合和命令式弹出。
 
 **只依赖 Flutter（和 `material_ui`）**，弹层自己实现（`OverlayEntry` +
 `RenderBox` 坐标换算），不依赖 `anchored_overlay` 之类的外部浮层库。
@@ -42,6 +42,7 @@ ColorPickerButton(
 // 2) 面板直接嵌在布局里
 ColorPicker(
   value: Color(_argb),                            // 不传 = 非受控，用 initialColor
+  showOpacity: true,                             // 要调透明度就打开，默认关
   onChanged: (int argb) => setState(() => _argb = argb),
   onChangeEnd: (int argb) => save(argb),          // 松手 / 提交时一次
 );
@@ -141,25 +142,69 @@ ColorPicker(mouseCursor: SystemMouseCursors.precise);
 重活（写文件、发请求、整页 `setState`），否则每帧都被拖慢，手感会变成
 “松手才跳过去”；要落库用 `onChangeEnd`。
 
+## 透明度
+
+默认**不处理透明度**：面板只画不透明色，`#RRGGBBAA` 里的 alpha 会被丢掉。
+要调透明度就传 `showOpacity: true`：
+
+```dart
+ColorPicker(
+  showOpacity: true,
+  value: Color(0x802B7FFF),        // 半透明的蓝
+  onChanged: (int argb) => setState(() => _argb = argb),  // 0x802B7FFF
+);
+
+ColorPickerButton(showOpacity: true);       // 弹出面板同理
+showColorPicker(context, showOpacity: true);
+```
+
+打开后：
+
+| 位置 | 变化 |
+|---|---|
+| 色相条下面 | 多一条透明度条（棋盘格 + 「全透明 → 当前色」渐变），可拖 |
+| hex 输入框右边 | 显示当前透明度百分比（`100%` / `50%` / `0%`） |
+| hex 文本 | 带上 alpha：`#RRGGBBAA`、`0xAARRGGBB`（直接粘进代码不丢透明度） |
+| hex 输入 | 写八位（`#RRGGBBAA` / `0xAARRGGBB`）就能改透明度 |
+| 当前色圆点 | 底下垫棋盘格，看得出透了多少 |
+
+关掉 `showOpacity` 时这些全都不存在——包括输入框：八位 hex 的 alpha 会被丢掉、
+按不透明处理，所以**关掉之后没有任何入口能改透明度**。
+
+回调参数始终是 `0xAARRGGBB`：透明度打开时高两位就是当前 alpha，
+关掉时保持颜色自带的值（默认 `FF`）。
+
 ## hex 输入
 
 支持 `#RGB`、`#RRGGBB`、`RRGGBB`、`#RRGGBBAA`、`0xRRGGBB`、`0xAARRGGBB`；
 回车、失焦、点面板都会提交；非法输入恢复成当前颜色；输入过程中不会被拖动
 回写覆盖。
 
+**输入框聚焦时会整体选中**：点进去直接打字就是整段替换，不用先手动全删；
+已经聚焦后再点一下则是正常摆光标，可以改某一位。
+
 显示格式由 `hexFormat` 决定：
 
 ```dart
 ColorPicker();                                      // #2B7FFF
 ColorPicker(hexFormat: ColorHexFormat.flutterArgb); // 0xFF2B7FFF，可直接粘进 Color(...)
+ColorPicker(showOpacity: true);                     // #2B7FFF80
+ColorPicker(showOpacity: true, hexFormat: ColorHexFormat.flutterArgb);
+                                                    // 0x802B7FFF
 ```
 
 要粘进 Flutter 代码就传 `ColorHexFormat.flutterArgb`；输入时两种写法都认，
 提交后按当前格式归一。颜色没变、只是写法不同时只归一文本，不会多发一次
 `onChangeEnd`。
 
-`colorToHex(Color, {format})` / `parseHexColor(String)` 也导出了，单独用也行
-（`parseHexColor` 对 `0xAARRGGBB` 会丢掉 alpha，因为面板没有透明度概念）。
+`colorToHex(Color, {format, includeAlpha})` / `parseHexColor(String, {includeAlpha})`
+也导出了，单独用也行：
+
+```dart
+colorToHex(const Color(0x802B7FFF), includeAlpha: true);    // #2B7FFF80
+parseHexColor('#2B7FFF80', includeAlpha: true);             // Color(0x802B7FFF)
+parseHexColor('#2B7FFF80');                                 // Color(0xFF2B7FFF)，默认丢 alpha
+```
 
 ## 复用弹层
 
