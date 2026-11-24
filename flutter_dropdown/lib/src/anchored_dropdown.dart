@@ -6,7 +6,7 @@
 ///
 /// | 文件 | 职责 |
 /// |---|---|
-/// | `dropdown_types.dart` | 公开类型：[DropdownAlignment] / [DropdownWidth] / [DropdownReveal] / [DropdownStyle] / [AnchoredDropdownItem] |
+/// | `dropdown_types.dart` | 公开类型：[DropdownAlignment] / [DropdownWidth] / [DropdownReveal] / [DropdownFieldStyle] / [DropdownItemStyle] / [AnchoredDropdownItem] |
 /// | `dropdown_reveal_clipper.dart` | [DropdownRevealClipper]：三种揭示动画的裁切路径 |
 /// | `dropdown_panel.dart` | 浮层外观（圆角 / 阴影 / 淡入 / 裁切） |
 /// | `dropdown_field.dart` | 可选便捷件：[AnchoredDropdownField] / [AnchoredDropdownArrow] |
@@ -32,11 +32,15 @@ part 'dropdown_field.dart';
 
 /// 任意触发组件 + 可定制列表的下拉框。
 ///
+/// 面板的宽度、间距、行高、配色等全部由 [DropdownItemStyle] 一处配置：
+///
 /// ```dart
 /// AnchoredDropdown<String>(
 ///   trigger: const Icon(Icons.more_vert),          // Icon / Image / 任意 Widget
 ///   alignment: DropdownAlignment.center,           // 左 / 中 / 右对齐
-///   width: const DropdownWidth.fixed(240),         // 或 .matchTrigger()
+///   itemStyle: DropdownItemStyle.of(context).copyWith(
+///     width: const DropdownWidth.fixed(240),       // 或 .matchTrigger()
+///   ),
 ///   reveal: DropdownReveal.topLeftToBottomRight,   // 三种揭示动画
 ///   items: const [AnchoredDropdownItem('a', label: 'Apple')],
 ///   onChanged: (v) => setState(() => selected = v),
@@ -49,15 +53,12 @@ class AnchoredDropdown<T extends Object> extends StatefulWidget {
     this.triggerBuilder,
     this.items = const [],
     this.itemBuilder,
-    this.menuBuilder,
     this.value,
     this.onChanged,
     this.onOpenChange,
     this.alignment = DropdownAlignment.left,
-    this.width = const DropdownWidth.matchTrigger(),
     this.reveal = DropdownReveal.unfold,
-    this.style,
-    this.maxMenuHeight = 240.0,
+    this.itemStyle,
     this.edgePadding = 8.0,
     this.semanticsLabel,
     this.initialOpen = false,
@@ -79,7 +80,7 @@ class AnchoredDropdown<T extends Object> extends StatefulWidget {
   final Widget Function(BuildContext context, bool isOpen, double progress)?
   triggerBuilder;
 
-  /// 内置选项列表；[menuBuilder] 存在时不参与渲染。
+  /// 内置选项列表。
   final List<AnchoredDropdownItem<T>> items;
 
   /// 自定义单行内容。返回的行内容会替换默认渲染，点击与禁用逻辑仍由组件管。
@@ -94,11 +95,6 @@ class AnchoredDropdown<T extends Object> extends StatefulWidget {
   )?
   itemBuilder;
 
-  /// 完全自定义下拉列表内容（任意 Widget）。存在时忽略 [items] /
-  /// [itemBuilder]，超出 [maxMenuHeight] 的滚动由调用方自己处理。
-  /// `context` 的说明同 [itemBuilder]。
-  final Widget Function(BuildContext context)? menuBuilder;
-
   /// 当前选中值。
   final T? value;
 
@@ -111,19 +107,14 @@ class AnchoredDropdown<T extends Object> extends StatefulWidget {
   /// 列表相对触发组件的水平对齐。
   final DropdownAlignment alignment;
 
-  /// 列表宽度策略：与触发器同宽（默认）或固定宽度。
-  final DropdownWidth width;
-
   /// 揭示动画。
   final DropdownReveal reveal;
 
-  /// 外观配置。为 null（默认）时取 [DropdownStyle.of]，按当前
-  /// [ThemeData.brightness] 自动在浅色 / 深色两套配色之间切换，
-  /// 与 [TextDropdown] 的行为一致；只改几项用 `copyWith`。
-  final DropdownStyle? style;
-
-  /// 列表内容最大高度（内置选项超出后内部滚动）。
-  final double maxMenuHeight;
+  /// 面板 + 选项行的全部外观（宽度、间距、行高、圆角、阴影、颜色…都在这）。
+  ///
+  /// 为 null（默认）时取 [DropdownItemStyle.of]，按当前
+  /// [ThemeData.brightness] 自动切换浅 / 深配色；只改几项用 `copyWith`。
+  final DropdownItemStyle? itemStyle;
 
   /// 列表贴到屏幕左右边缘时保留的最小留白；也用于水平夹取。
   final double edgePadding;
@@ -147,7 +138,8 @@ class AnchoredDropdown<T extends Object> extends StatefulWidget {
   State<AnchoredDropdown<T>> createState() => _AnchoredDropdownState<T>();
 }
 
-class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>>
+class _AnchoredDropdownState<T extends Object>
+    extends State<AnchoredDropdown<T>>
     with SingleTickerProviderStateMixin {
   final GlobalKey _triggerKey = GlobalKey();
   final FocusNode _triggerFocus = FocusNode(
@@ -191,9 +183,9 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
   Size _triggerSize = Size.zero;
   TextDirection? _direction;
 
-  /// 实际生效的外观：显式传的 style，或按当前明暗主题取的默认值。
-  /// 与 [TextDropdown] 一样存成字段，浮层 builder 也读同一份配置。
-  late DropdownStyle _style;
+  /// 实际生效的面板外观：显式传的 itemStyle，或按明暗主题取的默认值。
+  /// 存成字段让浮层 builder 也读同一份配置。
+  late DropdownItemStyle _itemStyle;
 
   @override
   void initState() {
@@ -216,7 +208,7 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
     // 在 State 的 context 里读方向：OverlayPortal 的浮层挂在 Overlay 上，
     // 它的 context 不在页面里嵌套的 Directionality 之下。
     _direction = Directionality.maybeOf(context);
-    _style = widget.style ?? DropdownStyle.of(context);
+    _itemStyle = widget.itemStyle ?? DropdownItemStyle.of(context);
     _syncDuration();
     _scheduleMeasure();
   }
@@ -224,6 +216,7 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
   @override
   void didUpdateWidget(AnchoredDropdown<T> oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _itemStyle = widget.itemStyle ?? DropdownItemStyle.of(context);
     _syncDuration();
     _scheduleMeasure();
   }
@@ -282,13 +275,14 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
     if (box == null || !box.hasSize || _screenSize.height <= 0) return false;
     final double top = box.localToGlobal(Offset.zero).dy;
     final double below = _screenSize.height - (top + box.size.height);
-    final DropdownStyle s = _style;
-    final double estimated = widget.menuBuilder != null
-        ? widget.maxMenuHeight
-        : math.min(
-            widget.items.length * s.itemHeight + s.padding * 2 + 2,
-            widget.maxMenuHeight,
-          );
+    final DropdownItemStyle s = _itemStyle;
+    final double estimated = math.min(
+      widget.items.length * s.itemHeight +
+          math.max(0, widget.items.length - 1) * s.itemGap +
+          s.padding * 2 +
+          2,
+      s.maxHeight,
+    );
     return below < estimated + 16 && top > below;
   }
 
@@ -309,7 +303,7 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
     final double raw = _reduce ? u : _progress.value;
     final double p = raw.clamp(0.0, 1.0);
     final bool above = _placedAbove;
-    final double gap = _style.gap;
+    final double gap = _itemStyle.gap;
     final double opacity = _kEaseOut.transform(_remap(u, 0.0, 0.22));
     final double rows = _reduce
         ? 1.0
@@ -335,12 +329,13 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
 
   /// 列表最终宽度。优先读当前帧之前的真实触发组件尺寸，量不到再用缓存。
   double _menuWidth() {
-    if (!widget.width.matchesTrigger) return widget.width.resolve(0);
+    final DropdownWidth width = _itemStyle.width;
+    if (!width.matchesTrigger) return width.resolve(0);
     final RenderBox? box = _currentTriggerBox();
     final double measured = box != null && box.hasSize
         ? box.size.width
         : _triggerSize.width;
-    return widget.width.resolve(measured);
+    return width.resolve(measured);
   }
 
   /// 对齐后如果列表会越过屏幕左右边缘，就沿 x 平移回来。
@@ -417,7 +412,7 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
         final _Frame f = _frame();
         final double x = _alignmentX(widget.alignment, _direction);
         final double menuWidth = _menuWidth();
-        final double gap = _style.gap;
+        final double gap = _itemStyle.gap;
         return Positioned(
           left: 0,
           top: 0,
@@ -439,7 +434,7 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
                   ignoring: !_open,
                   child: _DropdownPanel(
                     frame: f,
-                    style: _style,
+                    style: _itemStyle,
                     reveal: widget.reveal,
                     menu: _buildMenu(context),
                   ),
@@ -453,27 +448,14 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
   }
 
   Widget _buildMenu(BuildContext context) {
-    final Widget? custom = widget.menuBuilder?.call(context);
     final double maxHeight = math.max(
       0.0,
-      widget.maxMenuHeight - _style.padding * 2,
+      _itemStyle.maxHeight - _itemStyle.padding * 2,
     );
 
-    // 自定义内容自带滚动策略（`menuBuilder` 的文档就是这么说的），这里不再包
-    // 滚动视图，也就没有我们的滚动条。
-    if (custom != null) {
-      return Padding(
-        padding: EdgeInsets.all(_style.padding),
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: maxHeight),
-          child: custom,
-        ),
-      );
-    }
-
     // [Scrollbar] 包在 `Padding` **外面**：盒子铺满整条内容区，滑块才画在面板
-    // 内边缘上。放里面的话它会跟着 [DropdownStyle.padding] 往里缩，跟
-    // [DropdownStyle.itemPadding]（只缩进行内容）本来就没关系。
+    // 内边缘上。放里面的话它会跟着 [DropdownItemStyle.padding] 往里缩，跟
+    // [DropdownItemStyle.itemPadding]（只缩进行内容）本来就没关系。
     // `scrollbars: false` 关掉 Windows / macOS 上 [ScrollBehavior] 自动注入的
     // 那条，否则两条滑块会叠在一起画。
     return ScrollConfiguration(
@@ -485,7 +467,7 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
         child: Scrollbar(
           controller: _listScroll,
           child: Padding(
-            padding: EdgeInsets.all(_style.padding),
+            padding: EdgeInsets.all(_itemStyle.padding),
             child: ConstrainedBox(
               constraints: BoxConstraints(maxHeight: maxHeight),
               child: SingleChildScrollView(
@@ -503,6 +485,7 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: math.max(0.0, _itemStyle.itemGap),
       children: <Widget>[
         for (final AnchoredDropdownItem<T> item in widget.items)
           _buildItem(context, item),
@@ -533,16 +516,16 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
             : null,
         customBorder: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(
-            Radius.circular(_style.itemRadius),
+            Radius.circular(_itemStyle.itemRadius),
           ),
         ),
         child: Container(
-          height: _style.itemHeight,
-          padding: _style.itemPadding,
+          height: _itemStyle.itemHeight,
+          padding: _itemStyle.itemPadding,
           decoration: BoxDecoration(
-            color: selected ? _style.selectedColor : null,
+            color: selected ? _itemStyle.selectedColor : null,
             borderRadius: BorderRadius.all(
-              Radius.circular(_style.itemRadius),
+              Radius.circular(_itemStyle.itemRadius),
             ),
           ),
           child:
@@ -552,13 +535,19 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
     );
   }
 
+  /// 补默认字号与状态色；样式里显式给了 color 就尊重它。
+  TextStyle _textStyle(TextStyle? style, Color fallback) =>
+      (style ?? const TextStyle(fontSize: 14)).copyWith(
+        color: style?.color ?? fallback,
+      );
+
   Widget _defaultItemContent(
     BuildContext context,
     AnchoredDropdownItem<T> item,
     bool selected,
     bool enabled,
   ) {
-    final DropdownStyle s = _style;
+    final DropdownItemStyle s = _itemStyle;
     final bool customChild = item.child != null;
     final Widget content =
         item.child ??
@@ -566,9 +555,9 @@ class _AnchoredDropdownState<T extends Object> extends State<AnchoredDropdown<T>
           item.label ?? item.value.toString(),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            fontSize: 14,
-            color: enabled ? s.foreground : s.disabledColor,
+          style: _textStyle(
+            s.textStyle,
+            enabled ? s.foreground : s.disabledColor,
           ),
         );
 

@@ -105,25 +105,105 @@ class AnchoredDropdownItem<T extends Object> {
   final bool enabled;
 }
 
-/// 下拉框外观，TextDropdown 与 [AnchoredDropdown] 共用。
+/// 触发器（显示在外面的字段）外观。**只有内置字段的 [TextDropdown] 需要**；
 ///
-/// 不传 `style` 时两个门面都会用 [DropdownStyle.of] 按当前明暗主题取配色；
-/// 想改其中几项，用 `DropdownStyle.of(context).copyWith(...)`，别直接
-/// `DropdownStyle(...)` —— 裸构造走的是浅色默认值。
+/// [AnchoredDropdown] 的触发器是外部传入的任意 Widget，长什么样由调用方自己
+/// 负责，所以它没有也不需要这一类样式。想用统一的字段外观，可以拿它去配
+/// [AnchoredDropdownField]。
 ///
-/// 所有字段都是 const 默认值；几何字段（radius / gap / lip / padding /
-/// fieldPadding / itemPadding / itemHeight / 阴影参数）与颜色字段一样，在两个门面里都生效。
+/// 不传 `fieldStyle` 时取 [DropdownFieldStyle.of]，按明暗主题切换配色；改其中
+/// 几项用 `DropdownFieldStyle.of(context).copyWith(...)`。
 @immutable
-class DropdownStyle {
-  const DropdownStyle({
+class DropdownFieldStyle {
+  const DropdownFieldStyle({
+    this.width = 220.0,
+    this.height = 40.0,
+    this.radius = 12.0,
+    this.padding = const EdgeInsets.symmetric(horizontal: 12),
+    this.backgroundColor = Colors.white,
+    this.borderColor = const Color(0xFFD4D4D8),
+    this.foreground = const Color(0xFF18181B),
+    this.muted = const Color(0xFF71717A),
+    this.textStyle,
+  });
+
+  static DropdownFieldStyle light() => const DropdownFieldStyle();
+
+  static DropdownFieldStyle dark() => DropdownFieldStyle(
+    backgroundColor: const Color(0xFF211F26),
+    borderColor: const Color(0xFF49454F),
+    foreground: const Color(0xFFE6E1E5),
+    muted: const Color(0xFF938F99),
+  );
+
+  static DropdownFieldStyle of(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.dark ? dark() : light();
+
+  DropdownFieldStyle copyWith({
+    double? width,
+    double? height,
+    double? radius,
+    EdgeInsetsGeometry? padding,
+    Color? backgroundColor,
+    Color? borderColor,
+    Color? foreground,
+    Color? muted,
+    TextStyle? textStyle,
+  }) => DropdownFieldStyle(
+    width: width ?? this.width,
+    height: height ?? this.height,
+    radius: radius ?? this.radius,
+    padding: padding ?? this.padding,
+    backgroundColor: backgroundColor ?? this.backgroundColor,
+    borderColor: borderColor ?? this.borderColor,
+    foreground: foreground ?? this.foreground,
+    muted: muted ?? this.muted,
+    textStyle: textStyle ?? this.textStyle,
+  );
+
+  /// 字段宽度；[TextDropdown] 的下拉面板与它等宽。
+  final double width;
+
+  /// 字段高度。
+  final double height;
+
+  /// 字段四角圆角半径，全程恒定。
+  final double radius;
+
+  /// 文字 / 箭头到字段边框的距离。
+  final EdgeInsetsGeometry padding;
+
+  final Color backgroundColor;
+  final Color borderColor;
+
+  /// 选中值的文字色。
+  final Color foreground;
+
+  /// 占位文案 / 箭头 / 禁用态的文字色。
+  final Color muted;
+
+  /// 字段文字样式（未给 color 时按状态补 [foreground] / [muted]）。
+  final TextStyle? textStyle;
+}
+
+/// 下拉面板 + 选项行的外观。[TextDropdown] 与 [AnchoredDropdown] 共用。
+///
+/// 面板宽度、最大高度、与触发器的间距、揭示动画、阴影，以及所有选项行的
+/// 几何与颜色，都收在这里。两个门面只有这一套样式入口，不再有散参数覆盖。
+/// 不传 `itemStyle` 时取 [DropdownItemStyle.of]，改几项用 `.copyWith(...)`。
+@immutable
+class DropdownItemStyle {
+  const DropdownItemStyle({
+    this.width = const DropdownWidth.matchTrigger(),
+    this.maxHeight = 240.0,
     this.radius = 12.0,
     this.itemRadius = 8.0,
     this.gap = 8.0,
     this.lip = 8.0,
     this.padding = 4.0,
-    this.itemPadding = const EdgeInsets.symmetric(horizontal: 10),
-    this.fieldPadding = const EdgeInsets.symmetric(horizontal: 12),
     this.itemHeight = 36.0,
+    this.itemGap = 0.0,
+    this.itemPadding = const EdgeInsets.symmetric(horizontal: 10),
     this.shadowOpacity = 0.10,
     this.shadowBlurRadius = 12.0,
     this.shadowOffset = const Offset(0, 6),
@@ -134,23 +214,15 @@ class DropdownStyle {
     this.foreground = const Color(0xFF18181B),
     this.muted = const Color(0xFF71717A),
     this.disabledColor = const Color(0xFFA1A1AA),
+    this.textStyle,
     this.showCheck = true,
     this.checkIcon = Icons.check,
     this.checkSize = 14.0,
   });
 
-  /// 浅色配色：中性灰表面 + 深灰文字，即构造函数的 const 默认值。
-  static DropdownStyle light() => const DropdownStyle();
+  static DropdownItemStyle light() => const DropdownItemStyle();
 
-  /// 深色配色：Material 3 深色基线的那组表面色 —— 面板
-  /// `surfaceContainer` `#211F26`、选中行 `surfaceContainerHighest`
-  /// `#36343B`、描边 `outline` `#49454F`、文字 `onSurface` `#E6E1E5`、
-  /// 次级文字 `onSurfaceVariant` `#938F99`。
-  ///
-  /// 写成字面量而不是读 `ColorScheme`：组件默认外观不该被宿主 App 的主题
-  /// 牵着走，想跟主题走就显式传 `style:`（或者
-  /// `DropdownStyle.of(context).copyWith(...)`）。
-  static DropdownStyle dark() => DropdownStyle(
+  static DropdownItemStyle dark() => DropdownItemStyle(
     backgroundColor: const Color(0xFF211F26),
     borderColor: const Color(0xFF49454F),
     foreground: const Color(0xFFE6E1E5),
@@ -161,19 +233,20 @@ class DropdownStyle {
     shadowOpacity: 0.30,
   );
 
-  /// 跟随 [ThemeData.brightness] 的默认外观。
-  static DropdownStyle of(BuildContext context) =>
+  static DropdownItemStyle of(BuildContext context) =>
       Theme.of(context).brightness == Brightness.dark ? dark() : light();
 
-  DropdownStyle copyWith({
+  DropdownItemStyle copyWith({
+    DropdownWidth? width,
+    double? maxHeight,
     double? radius,
     double? itemRadius,
     double? gap,
     double? lip,
     double? padding,
-    EdgeInsetsGeometry? itemPadding,
-    EdgeInsetsGeometry? fieldPadding,
     double? itemHeight,
+    double? itemGap,
+    EdgeInsetsGeometry? itemPadding,
     double? shadowOpacity,
     double? shadowBlurRadius,
     Offset? shadowOffset,
@@ -184,18 +257,21 @@ class DropdownStyle {
     Color? foreground,
     Color? muted,
     Color? disabledColor,
+    TextStyle? textStyle,
     bool? showCheck,
     IconData? checkIcon,
     double? checkSize,
-  }) => DropdownStyle(
+  }) => DropdownItemStyle(
+    width: width ?? this.width,
+    maxHeight: maxHeight ?? this.maxHeight,
     radius: radius ?? this.radius,
     itemRadius: itemRadius ?? this.itemRadius,
     gap: gap ?? this.gap,
     lip: lip ?? this.lip,
     padding: padding ?? this.padding,
-    itemPadding: itemPadding ?? this.itemPadding,
-    fieldPadding: fieldPadding ?? this.fieldPadding,
     itemHeight: itemHeight ?? this.itemHeight,
+    itemGap: itemGap ?? this.itemGap,
+    itemPadding: itemPadding ?? this.itemPadding,
     shadowOpacity: shadowOpacity ?? this.shadowOpacity,
     shadowBlurRadius: shadowBlurRadius ?? this.shadowBlurRadius,
     shadowOffset: shadowOffset ?? this.shadowOffset,
@@ -206,10 +282,17 @@ class DropdownStyle {
     foreground: foreground ?? this.foreground,
     muted: muted ?? this.muted,
     disabledColor: disabledColor ?? this.disabledColor,
+    textStyle: textStyle ?? this.textStyle,
     showCheck: showCheck ?? this.showCheck,
     checkIcon: checkIcon ?? this.checkIcon,
     checkSize: checkSize ?? this.checkSize,
   );
+
+  /// 面板宽度策略。[AnchoredDropdown] 用它；[TextDropdown] 面板与字段等宽，忽略。
+  final DropdownWidth width;
+
+  /// 面板最大高度，超出后内部滚动。
+  final double maxHeight;
 
   /// 面板四角圆角半径，全程恒定、不参与动画。
   final double radius;
@@ -226,20 +309,14 @@ class DropdownStyle {
   /// 列表内边距：选项行外框到面板边框的距离。
   final double padding;
 
-  /// 选项行内边距：行内文字 / 打勾图标到选项行外框的距离。
-  ///
-  /// 默认水平 10；[TextDropdown] 与 [AnchoredDropdown] 的默认行渲染都用它。
-  /// 和 [fieldPadding]（触发器）是不同的两层。
-  final EdgeInsetsGeometry itemPadding;
-
-  /// 触发器内显示文字 / 箭头到边框的距离。
-  ///
-  /// [TextDropdown] 的内置字段和 [AnchoredDropdownField] 都用它，默认水平 12；
-  /// [AnchoredDropdownField.padding] 显式传值时优先于这里。
-  final EdgeInsetsGeometry fieldPadding;
-
-  /// 默认选项行高。
+  /// 选项行高。
   final double itemHeight;
+
+  /// 相邻选项之间的间距。
+  final double itemGap;
+
+  /// 选项行内边距：行内内容到选项行外框的距离。
+  final EdgeInsetsGeometry itemPadding;
 
   /// 阴影最大不透明度，实际值随展开进度渐强。
   final double shadowOpacity;
@@ -254,6 +331,9 @@ class DropdownStyle {
   final Color foreground;
   final Color muted;
   final Color disabledColor;
+
+  /// 选项文字样式（未给 color 时按状态补色）。
+  final TextStyle? textStyle;
 
   /// 选中项是否显示打勾图标（仅在默认行渲染时生效）。
   final bool showCheck;

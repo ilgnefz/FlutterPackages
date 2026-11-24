@@ -43,29 +43,29 @@ import 'anchored_dropdown.dart';
 /// )
 /// ```
 ///
-/// 外观全部由 [DropdownStyle] 统一配置，**不传就自动跟随明暗主题**
-/// （`DropdownStyle.of(context)` 按 `ThemeData.brightness` 取浅/深两套配色）。
-/// 只改几项用 `copyWith`，别裸构造 `DropdownStyle(...)`：那是浅色默认值。
+/// 外观分两类，各管一块、**不传就自动跟随明暗主题**：
+///
+/// * [DropdownFieldStyle] 管外面的触发器 —— 宽 / 高 / 圆角 / 边框 /
+///   内边距（文字 / 箭头到边框的距离）/ 文字样式。
+/// * [DropdownItemStyle] 管下拉面板 + 选项行 —— 圆角 / 间距 / 行高 /
+///   行间距 / 阴影 / 全部颜色 / 选项文字样式。
 ///
 /// ```dart
 /// TextDropdown<String>(
 ///   items: items,
-///   height: 32,
-///   itemGap: 2,
-///   mouseCursor: SystemMouseCursors.basic,
-///   style: DropdownStyle.of(context).copyWith(
+///   fieldStyle: DropdownFieldStyle.of(context).copyWith(
+///     height: 32,
 ///     radius: 8,
+///   ),
+///   itemStyle: DropdownItemStyle.of(context).copyWith(
+///     itemGap: 2,
 ///     borderColor: Colors.black12,
 ///   ),
 /// )
 /// ```
 ///
-/// `height` / `itemGap` / `radius` / `borderColor` / `textStyle` 这些散参数
-/// 是单点快捷覆盖，优先级高于 style；`DropdownStyle` 的几何字段
-/// （gap / lip / padding / itemPadding / fieldPadding / itemHeight / 阴影参数）则只有 style 能改。
-/// 想改「文字 / 箭头到边框的距离」用
-/// `style: DropdownStyle.of(context).copyWith(fieldPadding: EdgeInsets.symmetric(horizontal: 20))`；
-/// 想改「下拉栏里文字到选项行外框的距离」用 `itemPadding`，两者是不同层。
+/// 想改「文字 / 箭头到边框的距离」用 `fieldStyle.padding`；想改「下拉栏里
+/// 文字到选项行外框的距离」用 `itemStyle.itemPadding`，两者是不同层。
 class TextDropdown<T extends Object> extends StatefulWidget {
   const TextDropdown({
     super.key,
@@ -74,14 +74,8 @@ class TextDropdown<T extends Object> extends StatefulWidget {
     this.onChanged,
     this.onOpenChange,
     this.hint = 'Select',
-    this.width = 220,
-    this.height = _kTriggerHeight,
-    this.maxPanelHeight = 240,
-    this.radius,
-    this.itemGap = 0,
-    this.style,
-    this.borderColor,
-    this.textStyle,
+    this.fieldStyle,
+    this.itemStyle,
     this.mouseCursor,
     this.initialOpen = false,
     this.disabled = false,
@@ -105,50 +99,18 @@ class TextDropdown<T extends Object> extends StatefulWidget {
   /// 未选中时的占位文案。
   final String hint;
 
-  /// 触发器宽度，列表与它等宽。
-  final double width;
-
-  /// 触发器高度（选项行高固定 36，不跟着变）。
-  final double height;
-
-  /// 列表最大高度，超出后内部滚动。
-  final double maxPanelHeight;
-
-  /// 外框圆角：触发器、下拉面板、揭示裁切、阴影都用这一个值。
+  /// 触发器（显示在外面的字段）外观：宽 / 高 / 圆角 / 边框 / 内边距 / 文字样式。
   ///
-  /// 为 null（默认）时取 [DropdownStyle.radius]；选项行圆角取
-  /// `min(radius, style.itemRadius)` —— 内圆角不该比外框还大。
-  /// 这里给值就覆盖 style，属于单点快捷设置。
-  final double? radius;
+  /// 为 null（默认）时取 [DropdownFieldStyle.of]，自动跟随明暗主题；
+  /// 只改几项用 `.copyWith(...)`。
+  final DropdownFieldStyle? fieldStyle;
 
-  /// 相邻选项之间的间距（默认 0，紧挨着）。
-  /// 展开方向（往上 / 往下翻）的预估高度会把它算进去。
-  final double itemGap;
-
-  /// 外观配置：圆角、间距、行高、内边距、阴影以及全部颜色。
+  /// 下拉面板 + 选项行的外观：圆角 / 间距 / 行高 / 阴影 / 全部颜色。
   ///
-  /// 为 null（默认）时取 [DropdownStyle.of]，**自动跟随明暗主题** —— 这就是
-  /// 深色模式下下拉框不再一片白的关键。想只改几项：
-  /// ```dart
-  /// style: DropdownStyle.of(context).copyWith(borderColor: Colors.black12),
-  /// ```
-  /// 几何字段与 [radius] / [itemGap] 的关系见各自文档；[DropdownStyle] 的
-  /// 全部字段在本组件里都有效（含 showCheck / checkIcon / checkSize）。
-  final DropdownStyle? style;
-
-  /// 边框颜色快捷覆盖，优先于 [DropdownStyle.borderColor]。
-  /// 为 null 时用 style 的值（触发器与面板统一一个色）。
-  final Color? borderColor;
-
-  /// 文字样式：触发器与所有选项行共用。默认是 14px +
-  /// [DropdownStyle.foreground] / [DropdownStyle.muted] /
-  /// [DropdownStyle.disabledColor] 这组随主题变化的状态色。
-  ///
-  /// 单项可以用 [TextDropdownItem.textStyle] 再覆盖一次：那里用 `merge`，
-  /// 只改自己写明的字段（比如单项只给 color，仍保留这里的 fontSize）。
-  /// 样式里显式给了 `color` 就完全尊重它，没给才按状态补默认色 —— 所以
-  /// 自定义了颜色后，禁用项不会自动变灰，需要的话自己按 `enabled` 给色。
-  final TextStyle? textStyle;
+  /// 为 null（默认）时取 [DropdownItemStyle.of]，自动跟随明暗主题；
+  /// 只改几项用 `.copyWith(...)`。选项文字样式也在这里配，单项可用
+  /// [TextDropdownItem.textStyle] 再 `merge` 覆盖。
+  final DropdownItemStyle? itemStyle;
 
   /// 鼠标停在触发器 / 选项上时的光标；为 null（默认）时统一用手型
   /// `SystemMouseCursors.click`。禁用整个控件或单个选项时恒为普通箭头。
@@ -193,10 +155,10 @@ class TextDropdownItem<T extends Object> {
   /// 是否可点。
   final bool enabled;
 
-  /// 这一项的文字样式，覆盖 [TextDropdown.textStyle]。
+  /// 这一项的文字样式，覆盖 [DropdownItemStyle.textStyle]（选项）与
+  /// [DropdownFieldStyle.textStyle]（触发器显示选中值时）。
   ///
   /// 用 `merge` 叠加：只写 color 时，字号、字重等仍沿用组件级样式。
-  /// 选中项的样式也会用在触发器上，所以两边观感保持一致。
   final TextStyle? textStyle;
 
   /// 显示串：优先 [label]，否则用 [value] 的字符串形式。
@@ -206,12 +168,11 @@ class TextDropdownItem<T extends Object> {
 
 // ── 与 beUI 源码一致的常量 ────────────────────────────────────────────────
 
-// 几何与颜色的默认值统一交给 DropdownStyle（默认构造即原来的浅色值），
+// 几何与颜色的默认值统一交给两个 Style 类（默认构造即原来的浅色值），
 // 这里只保留「没有对应 style 字段」的常量：公开 UnfoldClipper 的默认参数，
 // 以及触发器高度 / 动画时长。
 const double _kRadius = 12.0; // RADIUS：四个角全程固定
 const double _kLip = 8.0; // LIP：起始时露出的薄边厚度
-const double _kTriggerHeight = 40.0;
 const Duration _kOpenDuration = Duration(milliseconds: 260);
 const Duration _kReduceDuration = Duration(milliseconds: 120);
 
@@ -380,10 +341,11 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
   bool _reduce = false;
   double _screenHeight = double.infinity;
 
-  /// 实际生效的外观：显式传的 style，或按当前明暗主题取的默认值。
+  /// 实际生效的两套外观：显式传的 style，或按当前明暗主题取的默认值。
   /// 用字段而不是在 build 里临时解析，是为了让 Overlay 的浮层 builder
   /// 也读到同一份配置（浮层的 context 不一定跟着主树 rebuild）。
-  late DropdownStyle _dropdownStyle;
+  late DropdownFieldStyle _fieldStyle;
+  late DropdownItemStyle _itemStyle;
 
   @override
   void initState() {
@@ -414,7 +376,8 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
   }
 
   void _resolveStyle() {
-    _dropdownStyle = widget.style ?? DropdownStyle.of(context);
+    _fieldStyle = widget.fieldStyle ?? DropdownFieldStyle.of(context);
+    _itemStyle = widget.itemStyle ?? DropdownItemStyle.of(context);
   }
 
   /// 当前选中项（用 `==` 匹配 [TextDropdown.value]），没有时返回 null。
@@ -440,10 +403,10 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
     return value == null ? widget.hint : value.toString();
   }
 
-  /// 组件级 [TextDropdown.textStyle] 打底，单项 [TextDropdownItem.textStyle]
+  /// 组件级样式（触发器 [DropdownFieldStyle.textStyle] 或选项
+  /// [DropdownItemStyle.textStyle]）打底，单项 [TextDropdownItem.textStyle]
   /// 用 merge 覆盖（没写明的字段沿用组件级）。
-  TextStyle? _styleFor(TextDropdownItem<T>? item) {
-    final TextStyle? base = widget.textStyle;
+  TextStyle? _styleFor(TextDropdownItem<T>? item, TextStyle? base) {
     final TextStyle? own = item?.textStyle;
     if (base == null) return own;
     if (own == null) return base;
@@ -456,14 +419,13 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
         color: style?.color ?? fallback,
       );
 
-  // 三个 clamp 后的外观派生量：radius / itemGap 允许外部随便传，负值在这里收住。
-  double get _radius =>
-      math.max(0.0, widget.radius ?? _dropdownStyle.radius);
+  // clamp 后的外观派生量：radius / itemGap 允许外部随便传，负值在这里收住。
+  double get _radius => math.max(0.0, _itemStyle.radius);
 
-  double get _itemGap => math.max(0.0, widget.itemGap);
+  double get _itemGap => math.max(0.0, _itemStyle.itemGap);
 
   /// 选项行圆角不超过外框，也不超过 style.itemRadius。
-  double get _itemRadius => math.min(_radius, _dropdownStyle.itemRadius);
+  double get _itemRadius => math.min(_radius, _itemStyle.itemRadius);
 
   /// 可点区域的光标（禁用判断在使用处单独做）。
   MouseCursor get _cursor => widget.mouseCursor ?? SystemMouseCursors.click;
@@ -511,11 +473,11 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
     final double below = _screenHeight - (top + box.size.height);
     final int count = widget.items.length;
     final double estimated = math.min(
-      count * _dropdownStyle.itemHeight +
+      count * _itemStyle.itemHeight +
           math.max(0, count - 1) * _itemGap +
-          _dropdownStyle.padding * 2 +
+          _itemStyle.padding * 2 +
           2,
-      widget.maxPanelHeight,
+      _itemStyle.maxHeight,
     );
     return below < estimated + 16 && top > below
         ? _Placement.top
@@ -554,11 +516,7 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
       p: p,
       offsetY: _reduce
           ? 0.0
-          : _lerp(
-              above ? _dropdownStyle.gap : -_dropdownStyle.gap,
-              0.0,
-              detach,
-            ),
+          : _lerp(above ? _itemStyle.gap : -_itemStyle.gap, 0.0, detach),
       opacity: opacity,
       shadow: _reduce ? opacity : shadow,
       rowsOpacity: _reduce ? 1.0 : rows,
@@ -577,7 +535,7 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
       },
       child: SizedBox(
         key: _fieldKey,
-        width: widget.width,
+        width: _fieldStyle.width,
         child: OverlayPortal(
           controller: _portal,
           overlayChildBuilder: _buildOverlay,
@@ -615,13 +573,12 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
             // 最终位置的 GAP + 动画中的 y（起始恰好把 GAP 抵消，贴合触发器）。
             offset: Offset(
               0,
-              (f.placedAbove ? -_dropdownStyle.gap : _dropdownStyle.gap) +
-                  f.offsetY,
+              (f.placedAbove ? -_itemStyle.gap : _itemStyle.gap) + f.offsetY,
             ),
             child: TapRegion(
               groupId: _tapGroup,
               child: SizedBox(
-                width: widget.width,
+                width: _fieldStyle.width,
                 child: IgnorePointer(ignoring: !_open, child: _buildPanel(f)),
               ),
             ),
@@ -632,7 +589,9 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
   }
 
   Widget _buildTrigger(_Frame f) {
-    final BorderRadius radius = BorderRadius.all(Radius.circular(_radius));
+    final BorderRadius radius = BorderRadius.all(
+      Radius.circular(math.max(0.0, _fieldStyle.radius)),
+    );
     return Focus(
       focusNode: _triggerFocus,
       onKeyEvent: _onKey,
@@ -651,17 +610,15 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
             label: _displayText,
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: _dropdownStyle.backgroundColor,
+                color: _fieldStyle.backgroundColor,
                 // 四个角恒定，不参与贴合 / 脱开形变。
                 borderRadius: radius,
-                border: Border.all(
-                  color: widget.borderColor ?? _dropdownStyle.borderColor,
-                ),
+                border: Border.all(color: _fieldStyle.borderColor),
               ),
               child: SizedBox(
-                height: widget.height,
+                height: _fieldStyle.height,
                 child: Padding(
-                  padding: _dropdownStyle.fieldPadding,
+                  padding: _fieldStyle.padding,
                   child: Row(
                     children: <Widget>[
                       Expanded(
@@ -670,10 +627,10 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: _textStyle(
-                            _styleFor(_selectedItem),
+                            _styleFor(_selectedItem, _fieldStyle.textStyle),
                             widget.value == null
-                                ? _dropdownStyle.muted
-                                : _dropdownStyle.foreground,
+                                ? _fieldStyle.muted
+                                : _fieldStyle.foreground,
                           ),
                         ),
                       ),
@@ -682,7 +639,7 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
                         child: Icon(
                           Icons.keyboard_arrow_down,
                           size: 18,
-                          color: _dropdownStyle.muted,
+                          color: _fieldStyle.muted,
                         ),
                       ),
                     ],
@@ -702,11 +659,9 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
     Widget body = DecoratedBox(
       key: _bodyKey,
       decoration: BoxDecoration(
-        color: _dropdownStyle.backgroundColor,
+        color: _itemStyle.backgroundColor,
         borderRadius: radius,
-        border: Border.all(
-          color: widget.borderColor ?? _dropdownStyle.borderColor,
-        ),
+        border: Border.all(color: _itemStyle.borderColor),
       ),
       child: Material(
         type: MaterialType.transparency,
@@ -729,7 +684,7 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
           progress: f.p,
           nearRadius: _radius,
           radius: _radius,
-          lip: _dropdownStyle.lip,
+          lip: _itemStyle.lip,
           placedAbove: f.placedAbove,
         ),
         child: body,
@@ -744,11 +699,11 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
         borderRadius: radius,
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: _dropdownStyle.shadowColor.withValues(
-              alpha: _dropdownStyle.shadowOpacity * f.shadow,
+            color: _itemStyle.shadowColor.withValues(
+              alpha: _itemStyle.shadowOpacity * f.shadow,
             ),
-            blurRadius: _dropdownStyle.shadowBlurRadius,
-            offset: _dropdownStyle.shadowOffset,
+            blurRadius: _itemStyle.shadowBlurRadius,
+            offset: _itemStyle.shadowOffset,
           ),
         ],
       ),
@@ -760,7 +715,7 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
   ///
   /// [Scrollbar] 刻意包在 `Padding` **外面**：它的盒子铺满整条内容区，滑块就画
   /// 在面板内边缘上。反过来（或依赖桌面平台默认注入的那条）滑块会跟着
-  /// [DropdownStyle.padding] 往里缩；而 [DropdownStyle.itemPadding] 只影响行
+  /// [DropdownItemStyle.padding] 往里缩；而 [DropdownItemStyle.itemPadding] 只影响行
   /// 内容的缩进，跟滑块位置无关 —— 两者怎么调，滑块都紧挨着边。
   ///
   /// `Scrollbars: false` 关掉平台注入的那条：Windows / macOS 上 Material 的
@@ -776,12 +731,12 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
         child: Scrollbar(
           controller: _listScroll,
           child: Padding(
-            padding: EdgeInsets.all(_dropdownStyle.padding),
+            padding: EdgeInsets.all(_itemStyle.padding),
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 maxHeight: math.max(
                   0.0,
-                  widget.maxPanelHeight - _dropdownStyle.padding * 2,
+                  _itemStyle.maxHeight - _itemStyle.padding * 2,
                 ),
               ),
               child: SingleChildScrollView(
@@ -823,12 +778,10 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
         mouseCursor: enabled ? _cursor : SystemMouseCursors.basic,
         customBorder: RoundedRectangleBorder(borderRadius: itemRadius),
         child: Container(
-          height: _dropdownStyle.itemHeight,
-          padding: _dropdownStyle.itemPadding,
+          height: _itemStyle.itemHeight,
+          padding: _itemStyle.itemPadding,
           decoration: BoxDecoration(
-            color: selected
-                ? _dropdownStyle.selectedColor
-                : Colors.transparent,
+            color: selected ? _itemStyle.selectedColor : Colors.transparent,
             borderRadius: itemRadius,
           ),
           child: Row(
@@ -839,18 +792,16 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: _textStyle(
-                    _styleFor(item),
-                    enabled
-                        ? _dropdownStyle.foreground
-                        : _dropdownStyle.disabledColor,
+                    _styleFor(item, _itemStyle.textStyle),
+                    enabled ? _itemStyle.foreground : _itemStyle.disabledColor,
                   ),
                 ),
               ),
-              if (selected && _dropdownStyle.showCheck)
+              if (selected && _itemStyle.showCheck)
                 Icon(
-                  _dropdownStyle.checkIcon,
-                  size: _dropdownStyle.checkSize,
-                  color: _dropdownStyle.foreground,
+                  _itemStyle.checkIcon,
+                  size: _itemStyle.checkSize,
+                  color: _itemStyle.foreground,
                 ),
             ],
           ),

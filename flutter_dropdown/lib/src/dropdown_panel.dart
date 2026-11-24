@@ -14,10 +14,10 @@ class _DropdownPanel extends StatelessWidget {
   });
 
   final _Frame frame;
-  final DropdownStyle style;
+  final DropdownItemStyle style;
   final DropdownReveal reveal;
 
-  /// 已经构建好的列表内容（内置选项或 [AnchoredDropdown.menuBuilder] 的产物）。
+  /// 已经构建好的列表内容（内置选项列表）。
   final Widget menu;
 
   @override

@@ -77,15 +77,15 @@ void main() {
       expect(find.text('Select'), findsNothing);
     });
 
-    testWidgets('fieldPadding 控制文字 / 箭头到边框的距离', (tester) async {
+    testWidgets('fieldStyle.padding 控制文字 / 箭头到边框的距离', (tester) async {
       await tester.pumpWidget(
         _wrap(
           TextDropdown<String>(
             items: const <TextDropdownItem<String>>[
               TextDropdownItem<String>('a', label: 'Apple'),
             ],
-            style: DropdownStyle.light().copyWith(
-              fieldPadding: const EdgeInsets.symmetric(horizontal: 24),
+            fieldStyle: DropdownFieldStyle.light().copyWith(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
             ),
           ),
         ),
@@ -101,14 +101,14 @@ void main() {
       );
     });
 
-    testWidgets('itemPadding 控制选项文字到行外框的距离', (tester) async {
+    testWidgets('itemStyle.itemPadding 控制选项文字到行外框的距离', (tester) async {
       await tester.pumpWidget(
         _wrap(
           TextDropdown<String>(
             items: const <TextDropdownItem<String>>[
               TextDropdownItem<String>('a', label: 'Apple'),
             ],
-            style: DropdownStyle.light().copyWith(
+            itemStyle: DropdownItemStyle.light().copyWith(
               itemPadding: const EdgeInsets.symmetric(horizontal: 30),
             ),
           ),
@@ -215,22 +215,6 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('One'), findsOneWidget);
     });
-
-    testWidgets('menuBuilder 完全自定义列表内容', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          AnchoredDropdown<int>(
-            trigger: const Text('open'),
-            menuBuilder: (BuildContext context) =>
-                const SizedBox(key: ValueKey<String>('custom'), width: 80),
-          ),
-        ),
-      );
-
-      await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey<String>('custom')), findsOneWidget);
-    });
   });
 
   group('滚动条', () {
@@ -244,8 +228,8 @@ void main() {
           TextDropdown<String>(
             key: dropdownKey,
             items: _manyTextItems(),
-            maxPanelHeight: 120,
-            style: DropdownStyle.light().copyWith(
+            itemStyle: DropdownItemStyle.light().copyWith(
+              maxHeight: 120,
               padding: 4,
               itemPadding: const EdgeInsets.symmetric(horizontal: 10),
             ),
@@ -274,8 +258,8 @@ void main() {
           TextDropdown<String>(
             key: dropdownKey,
             items: _manyTextItems(),
-            maxPanelHeight: 120,
-            style: DropdownStyle.light().copyWith(
+            itemStyle: DropdownItemStyle.light().copyWith(
+              maxHeight: 120,
               padding: 12,
               itemPadding: const EdgeInsets.symmetric(horizontal: 30),
             ),
@@ -301,8 +285,8 @@ void main() {
           AnchoredDropdown<int>(
             trigger: const Text('open'),
             items: _manyAnchoredItems(),
-            maxMenuHeight: 120,
-            style: DropdownStyle.light().copyWith(
+            itemStyle: DropdownItemStyle.light().copyWith(
+              maxHeight: 120,
               padding: 12,
               itemPadding: const EdgeInsets.symmetric(horizontal: 24),
             ),
@@ -328,7 +312,10 @@ void main() {
 
       await tester.pumpWidget(
         _wrap(
-          TextDropdown<String>(items: _manyTextItems(), maxPanelHeight: 120),
+          TextDropdown<String>(
+            items: _manyTextItems(),
+            itemStyle: DropdownItemStyle.light().copyWith(maxHeight: 120),
+          ),
         ),
       );
       await tester.tap(find.byType(TextDropdown<String>));
@@ -344,7 +331,10 @@ void main() {
     testWidgets('列表能滚动（滚动条接的是同一个 controller）', (tester) async {
       await tester.pumpWidget(
         _wrap(
-          TextDropdown<String>(items: _manyTextItems(), maxPanelHeight: 120),
+          TextDropdown<String>(
+            items: _manyTextItems(),
+            itemStyle: DropdownItemStyle.light().copyWith(maxHeight: 120),
+          ),
         ),
       );
       await tester.tap(find.byType(TextDropdown<String>));
@@ -365,14 +355,16 @@ void main() {
     });
   });
 
-  group('DropdownStyle', () {
-    testWidgets('of() 跟随 ThemeData.brightness', (tester) async {
-      late DropdownStyle style;
+  group('样式', () {
+    testWidgets('两套 style 的 of() 都跟随 ThemeData.brightness', (tester) async {
+      late DropdownFieldStyle field;
+      late DropdownItemStyle item;
       await tester.pumpWidget(
         _wrap(
           Builder(
             builder: (BuildContext context) {
-              style = DropdownStyle.of(context);
+              field = DropdownFieldStyle.of(context);
+              item = DropdownItemStyle.of(context);
               return const SizedBox.shrink();
             },
           ),
@@ -380,22 +372,28 @@ void main() {
         ),
       );
 
-      expect(style.backgroundColor, const Color(0xFF211F26));
-      expect(style.selectedColor, const Color(0xFF36343B));
-      expect(style.foreground, const Color(0xFFE6E1E5));
-      expect(style.borderColor, const Color(0xFF49454F));
+      expect(field.backgroundColor, const Color(0xFF211F26));
+      expect(field.foreground, const Color(0xFFE6E1E5));
+      expect(item.backgroundColor, const Color(0xFF211F26));
+      expect(item.selectedColor, const Color(0xFF36343B));
+      expect(item.foreground, const Color(0xFFE6E1E5));
+      expect(item.borderColor, const Color(0xFF49454F));
     });
 
     test('light() / dark() / copyWith 只改指定字段', () {
-      final DropdownStyle light = DropdownStyle.light();
-      expect(light.backgroundColor, Colors.white);
+      final DropdownFieldStyle field = DropdownFieldStyle.light();
+      expect(field.backgroundColor, Colors.white);
+      final DropdownFieldStyle patchedField = field.copyWith(width: 300);
+      expect(patchedField.width, 300);
+      expect(patchedField.foreground, field.foreground);
 
-      final DropdownStyle patched = light.copyWith(radius: 20.0);
+      final DropdownItemStyle light = DropdownItemStyle.light();
+      final DropdownItemStyle patched = light.copyWith(radius: 20.0);
       expect(patched.radius, 20.0);
       expect(patched.foreground, light.foreground);
       expect(patched.itemHeight, light.itemHeight);
 
-      final DropdownStyle dark = DropdownStyle.dark();
+      final DropdownItemStyle dark = DropdownItemStyle.dark();
       expect(dark.shadowOpacity, 0.30);
       expect(dark.disabledColor.a, closeTo(0.6, 0.01));
     });

@@ -59,7 +59,7 @@ class AnchoredDropdownField extends StatelessWidget {
 
   final double height;
 
-  /// 触发器背景 / 边框 / 前景色；为 null 时分别取 [DropdownStyle] 的
+  /// 触发器背景 / 边框 / 前景色；为 null 时分别取 [DropdownFieldStyle] 的
   /// `backgroundColor` / `borderColor` / `foreground` / `muted`，
   /// 所以不传也能跟随明暗主题。
   final Color? color;
@@ -70,17 +70,17 @@ class AnchoredDropdownField extends StatelessWidget {
   /// 为 true 时用 [muted] 颜色（未选中时的占位态）。
   final bool isHint;
 
-  /// 文字 / 箭头到边框的距离；为 null 时取 [DropdownStyle.fieldPadding]。
+  /// 文字 / 箭头到边框的距离；为 null 时取 [DropdownFieldStyle.padding]。
   final EdgeInsetsGeometry? padding;
   final double radius;
 
-  /// 可选：直接复用下拉框的 [DropdownStyle] 配色；为 null 时跟随明暗主题
-  /// （[DropdownStyle.of]）。
-  final DropdownStyle? style;
+  /// 可选：直接复用字段的 [DropdownFieldStyle] 配色；为 null 时跟随明暗主题
+  /// （[DropdownFieldStyle.of]）。
+  final DropdownFieldStyle? style;
 
   @override
   Widget build(BuildContext context) {
-    final DropdownStyle s = style ?? DropdownStyle.of(context);
+    final DropdownFieldStyle s = style ?? DropdownFieldStyle.of(context);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: color ?? s.backgroundColor,
@@ -90,7 +90,7 @@ class AnchoredDropdownField extends StatelessWidget {
       child: SizedBox(
         height: height,
         child: Padding(
-          padding: padding ?? s.fieldPadding,
+          padding: padding ?? s.padding,
           child: Row(
             children: <Widget>[
               Expanded(

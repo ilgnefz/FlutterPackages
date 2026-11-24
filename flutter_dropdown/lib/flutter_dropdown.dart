@@ -11,19 +11,19 @@
 /// `value` / `onChanged` 用的是 `T` 本身，显示文字由 item 的 `label` 决定，
 /// 所以 enum、数字、自定义对象都能直接当值用，不必先转成字符串。
 ///
-/// 文字样式分两层：`TextDropdown.textStyle` 管触发器和全部选项，
-/// `TextDropdownItem.textStyle` 只覆盖某一项（merge 叠加）。
+/// ## 外观：两类 style，各管一块
 ///
-/// ## 外观与明暗主题
+/// * [DropdownFieldStyle] —— **外面显示的触发器**（宽 / 高 / 圆角 / 边框 /
+///   内边距 / 文字样式）。只有内置字段的 [TextDropdown] 需要；
+///   [AnchoredDropdown] 的触发器是外部传入的 Widget，样式由调用方自己管。
+/// * [DropdownItemStyle] —— **下拉面板 + 选项行**（面板宽度 / 最大高度 /
+///   与触发器的间距 / 行高 / 行间距 / 圆角 / 阴影 / 全部颜色 / 选项文字样式）。
+///   两个门面共用。
 ///
-/// 两个门面共用 [DropdownStyle]（圆角 / 间距 / 内边距 / 行高 / 阴影 / 全部颜色）。
-/// 两者不传 `style` 时都用 `DropdownStyle.of(context)`，按
-/// `ThemeData.brightness` 在 `DropdownStyle.light()` 与
-/// `DropdownStyle.dark()` 之间自动切换；想只改几项用
-/// `DropdownStyle.of(context).copyWith(...)`。
+/// 单项的 [TextDropdownItem.textStyle] 用 `merge` 覆盖组件级选项样式。
 ///
-/// [TextDropdown] 的高度、圆角、边框色、选项间距、鼠标光标都是构造参数，
-/// 见它的类文档示例。
+/// 两者不传 style 时分别取 `XxxStyle.of(context)`，按 `ThemeData.brightness`
+/// 在 light / dark 之间自动切换；只改几项用 `.copyWith(...)`。
 ///
 /// ## 两个门面怎么选
 ///
