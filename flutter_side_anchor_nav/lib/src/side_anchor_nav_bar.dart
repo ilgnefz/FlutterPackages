@@ -304,13 +304,22 @@ class _SideTabTile extends StatelessWidget {
     final bool selected = info.selected;
     final bool enabled = info.enabled;
 
+    // 专门的文字色字段优先于 labelStyle 自带的 color：后者常来自
+    // theme.textTheme.bodyMedium（自带 onSurface），若让它抢占会把
+    // selectedTextColor / textColor 短路掉（图标用 foreground 不受影响，
+    // 曾出现「图标变色、文字不变」的现象）。labelStyle 的 color 仅作兜底。
     final Color foreground;
     if (!enabled) {
       foreground = scheme.onSurface.withValues(alpha: 0.38);
     } else if (selected) {
-      foreground = style.selectedTextColor ?? scheme.onPrimaryContainer;
+      foreground = style.selectedTextColor ??
+          style.selectedLabelStyle?.color ??
+          style.labelStyle?.color ??
+          scheme.onPrimaryContainer;
     } else {
-      foreground = style.textColor ?? scheme.onSurfaceVariant;
+      foreground = style.textColor ??
+          style.labelStyle?.color ??
+          scheme.onSurfaceVariant;
     }
 
     final TextStyle baseStyle =
@@ -320,7 +329,7 @@ class _SideTabTile extends StatelessWidget {
         theme.textTheme.bodyMedium ??
         const TextStyle();
     final TextStyle labelStyle = baseStyle.copyWith(
-      color: baseStyle.color ?? foreground,
+      color: foreground,
       fontWeight: selected
           ? baseStyle.fontWeight ?? FontWeight.w600
           : baseStyle.fontWeight,
