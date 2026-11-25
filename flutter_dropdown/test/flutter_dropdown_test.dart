@@ -346,6 +346,52 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('动作项 label 可用 color 单独染色，禁用行仍走状态色', (tester) async {
+      const Color accent = Color(0xFF00897B);
+      const Color styleColor = Color(0xFF7C4DFF);
+      final DropdownItemStyle base = DropdownItemStyle.light().copyWith(
+        textStyle: const TextStyle(fontSize: 13, color: styleColor),
+      );
+      await tester.pumpWidget(
+        _wrap(
+          AnchoredDropdown(
+            trigger: const Text('open'),
+            itemStyle: base,
+            items: <AnchoredDropdownItem<Object>>[
+              AnchoredDropdownItem.action(
+                label: '染色',
+                color: accent,
+                onTap: (BuildContext _) {},
+              ),
+              AnchoredDropdownItem.action(
+                label: '继承样式色',
+                onTap: (BuildContext _) {},
+              ),
+              AnchoredDropdownItem.action(
+                label: '禁用带色',
+                color: accent,
+                enabled: false,
+                onTap: (BuildContext _) {},
+              ),
+            ],
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      TextStyle styleOf(String text) =>
+          tester.widget<Text>(find.text(text)).style!;
+      // 条目自己的 color 压过面板 textStyle 里的 color。
+      expect(styleOf('染色').color, accent);
+      // 没给 color 的行保持原样。
+      expect(styleOf('继承样式色').color, styleColor);
+      // 禁用行即使给了 color 也还是灰的。
+      expect(styleOf('禁用带色').color, base.disabledColor);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('动作项没给 label 也不崩（不再走 value.toString）', (tester) async {
       await tester.pumpWidget(
         _wrap(

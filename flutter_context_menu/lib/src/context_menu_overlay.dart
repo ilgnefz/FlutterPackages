@@ -201,11 +201,13 @@ class _ContextMenuOverlay<T extends Object> {
     if (!item.hasChildren || !item.enabled) return;
     final List<ContextMenuItem<T>> children = item.children!;
 
-    _trimLevels(levelIndex + 1);
+    // 已经展开的正是这一项：直接沿用现有子菜单，别重建（重建会换 GlobalKey，
+    // 子菜单又播一遍揭示动画，点一下已展开的父项看起来像闪了一下）。
     if (_levels.length > levelIndex + 1 &&
         _levels[levelIndex + 1].parentIndex == itemIndex) {
-      return; // 已经展开的正是这一项，避免 hover / tap 重复重建。
+      return;
     }
+    _trimLevels(levelIndex + 1);
 
     final RenderBox box = overlay.context.findRenderObject()! as RenderBox;
     // 子菜单宽度可以按父项单独指定（ContextMenuItem.width），根菜单不带。

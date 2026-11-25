@@ -91,6 +91,7 @@ class AnchoredDropdownItem<T extends Object> {
   const AnchoredDropdownItem(
     this.value, {
     this.label,
+    this.color,
     this.child,
     this.enabled = true,
     this.onTap,
@@ -124,6 +125,7 @@ class AnchoredDropdownItem<T extends Object> {
   const AnchoredDropdownItem.action({
     required this.onTap,
     this.label,
+    this.color,
     this.child,
     this.enabled = true,
     this.closeOnTap = true,
@@ -138,6 +140,14 @@ class AnchoredDropdownItem<T extends Object> {
 
   /// 默认渲染用的文字；[child] 为空时生效。
   final String? label;
+
+  /// 这一行 [label] 的颜色，优先级高于面板的
+  /// [DropdownItemStyle.textStyle] / [DropdownItemStyle.foreground]。
+  ///
+  /// 只作用于内置的 [label] 渲染：传了 [child] 就由自己的内容负责配色。
+  /// 禁用行（[enabled] 为 false 或整个下拉被禁用）始终是
+  /// [DropdownItemStyle.disabledColor]，这里的颜色不参与。
+  final Color? color;
 
   /// 自定义行内容，优先于 [label]。
   final Widget? child;

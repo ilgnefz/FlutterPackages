@@ -130,7 +130,8 @@ class ContextMenuItem<T extends Object> {
   /// 为 false 时置灰、不可点、跳过键盘导航，也不会展开子菜单。
   final bool enabled;
 
-  /// 危险操作：文字与图标转成 [ContextMenuStyle.dangerColor]。
+  /// 危险操作：文字与图标转成 [ContextMenuStyle.dangerColor]（默认
+  /// [Colors.red]）。
   /// 同时传了 [color] 时以 [color] 为准。
   final bool danger;
 
@@ -317,7 +318,12 @@ class ContextMenuStyle {
   final Color? foreground;
   final Color? muted;
   final Color? disabledColor;
+
+  /// `danger: true` 的行用什么颜色，**默认 [Colors.red]**（`#F44336`），
+  /// 不跟 `colorScheme.error` 走 —— M3 的 error 在浅色下是深砖红、深色下
+  /// 是浅粉，和"删除"惯用的鲜红对不上。
   final Color? dangerColor;
+
   final Color? shadowColor;
 
   /// 操作项主文案的基础样式，会先与 `bodyMedium` 合并。
@@ -443,7 +449,7 @@ _ContextMenuPalette _resolveContextMenuPalette(
     foreground: style.foreground ?? scheme.onSurface,
     muted: style.muted ?? scheme.onSurfaceVariant,
     disabled: style.disabledColor ?? scheme.onSurface.withAlpha(100),
-    danger: style.dangerColor ?? scheme.error,
+    danger: style.dangerColor ?? Colors.red,
     shadow: style.shadowColor ?? scheme.shadow,
   );
 }

@@ -1,3 +1,28 @@
+## 0.8.1
+
+* **修掉「两行同时高亮」**：面板原来把 hover 与键盘高亮分开存（`_hovered` /
+  `_keyboardHighlight`），键盘走过一次之后指针再移到别的行，两行会一起亮。
+  现在合并成单一的「活动行」，指针与键盘都只是往同一处写。
+* 行渲染不再自持 hover 状态（`_ContextMenuItemView` 改成 Stateless）：以前
+  items 原地刷新或热重载后 State 被复用，旧的高亮会留在别的行上，出现没有
+  指针的幽灵 hover；之后指针移到正常行就是两行亮。面板在 items 变化时也会
+  丢掉已失效的活动行。
+* 新增 1 条回归测试：`↓` 高亮第一项后 hover「删除」，断言前一行恢复透明、
+  只有指针所在行亮。
+* 顺手修了 `_openSubmenu` 里的顺序问题：先 `_trimLevels` 再判断「已经是这一
+  项」，判断永远为假成了死代码，点已展开的子菜单父项会重建子菜单、重播一遍
+  揭示动画。现在先判断再缩容，点击保持原状。新增 1 条测试用面板 State 的
+  identity 守住这一点。
+
+## 0.8.0
+
+* `danger: true` 的默认颜色从 `colorScheme.error` 改成 **`Colors.red`**
+  （`#F44336`）。M3 的 error 浅色下是深砖红、深色下是浅粉，跟"删除"惯用的
+  鲜红对不上；改成固定值后，和 App 里 `Colors.red` 的删除按钮同色，明暗主题
+  表现一致。仍可用 `ContextMenuStyle.dangerColor` 或单行 `color` 覆盖。
+* 新增 1 条测试：深色主题下 `colorScheme.error != Colors.red`，而 danger 行
+  仍是 `Colors.red`。
+
 ## 0.7.0
 
 * **修正 `ContextMenuReveal.unfold` 的方向**：贴边揭开现在只走垂直轴 —— 菜单

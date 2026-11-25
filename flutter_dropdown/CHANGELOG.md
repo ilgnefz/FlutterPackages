@@ -1,3 +1,14 @@
+## 1.0.6
+
+* `AnchoredDropdownItem.color`：单独设置这一行 `label` 的文字颜色，值项与
+  `.action` 动作项都支持。优先级：禁用 > 条目 `color` > 面板
+  `textStyle.color` > `foreground`；只作用于内置 `label` 渲染，传了 `child`
+  仍由调用方自己配色。
+* 顺带把禁用行收紧了：以前面板 `textStyle.color` 会盖住 `disabledColor`，
+  现在禁用行一律是 `disabledColor`。
+* 新增 1 条测试：三行对照（条目 color 压过面板 textStyle.color / 没给 color
+  的行保持原样 / 禁用行即使给了 color 也仍是灰）。
+
 ## 1.0.5
 
 * `AnchoredDropdownItem.action(...)`：**没有值**的动作项。纯动作菜单（筛选、

@@ -6,7 +6,12 @@ part of '../flutter_context_menu.dart';
 ///
 /// 外层面板是 [Material]，所以这里用 [InkWell] + [Ink] 而不是
 /// `Container(decoration:)` —— 后者会把 Material 上的水波纹盖住。
-class _ContextMenuItemView<T extends Object> extends StatefulWidget {
+///
+/// hover 高亮**不自持状态**：指针进出只回调 [onHover]，由
+/// [ContextMenuPanelState] 决定哪一行是活动行（它同时管键盘导航）。行内再存
+/// 一份 `_hovered` 的话，键盘高亮与指针会各亮一行；而且 items 原地刷新时
+/// State 被复用，旧的高亮会留在别的行上。
+class _ContextMenuItemView<T extends Object> extends StatelessWidget {
   const _ContextMenuItemView({
     required this.item,
     required this.index,
@@ -33,52 +38,33 @@ class _ContextMenuItemView<T extends Object> extends StatefulWidget {
   final VoidCallback onTap;
   final ValueChanged<bool> onHover;
 
-  @override
-  State<_ContextMenuItemView<T>> createState() =>
-      _ContextMenuItemViewState<T>();
-}
-
-class _ContextMenuItemViewState<T extends Object>
-    extends State<_ContextMenuItemView<T>> {
-  bool _hovered = false;
-
   Color get _foreground {
-    if (!widget.item.enabled) return widget.palette.disabled;
-    return widget.item.color ??
-        (widget.item.danger
-            ? widget.palette.danger
-            : widget.palette.foreground);
-  }
-
-  void _setHover(bool value) {
-    if (_hovered == value) return;
-    setState(() => _hovered = value);
-    widget.onHover(value);
+    if (!item.enabled) return palette.disabled;
+    return item.color ?? (item.danger ? palette.danger : palette.foreground);
   }
 
   TextStyle _textStyle({required Color color}) {
     // 先与主题的 bodyMedium 合并（fontFamily / 字重 / 字距都跟着主题走），
     // 只把字号和前景色落到组件自己的配置上；显式传的 textStyle 字号优先。
-    return widget.baseTextStyle
-        .merge(widget.style.textStyle)
+    return baseTextStyle
+        .merge(style.textStyle)
         .copyWith(
-          fontSize: widget.style.textStyle?.fontSize ?? widget.style.fontSize,
+          fontSize: style.textStyle?.fontSize ?? style.fontSize,
           color: color,
         );
   }
 
   @override
   Widget build(BuildContext context) {
-    final ContextMenuStyle style = widget.style;
-    final bool selectable = widget.item.isSelectable;
-    final bool active = selectable && (widget.highlighted || _hovered);
+    final bool selectable = item.isSelectable;
+    final bool active = selectable && highlighted;
 
     return Semantics(
       button: true,
       enabled: selectable,
       child: InkWell(
-        onTap: selectable ? widget.onTap : null,
-        onHover: selectable ? _setHover : null,
+        onTap: selectable ? onTap : null,
+        onHover: selectable ? onHover : null,
         // 禁用行显式回落默认箭头：直接传 style.mouseCursor 的话，置灰的行
         // 也会顶着手型光标，看起来像能点。
         mouseCursor: selectable ? style.mouseCursor : MouseCursor.defer,
@@ -86,27 +72,22 @@ class _ContextMenuItemViewState<T extends Object>
         // hover 高亮由下面的 Ink 统一画，避免两层颜色叠加变深。
         hoverColor: Colors.transparent,
         highlightColor: Colors.transparent,
-        splashColor: widget.palette.hover,
+        splashColor: palette.hover,
         child: Ink(
-          key: contextMenuItemKey(widget.index, widget.level),
+          key: contextMenuItemKey(index, level),
           height: style.itemHeight,
           padding: EdgeInsets.symmetric(horizontal: style.itemPadding),
           decoration: BoxDecoration(
-            color: active ? widget.palette.hover : Colors.transparent,
+            color: active ? palette.hover : Colors.transparent,
             borderRadius: BorderRadius.circular(style.itemRadius),
           ),
-          child:
-              widget.builder?.call(context, widget.item) ??
-              (widget.item.child ?? _defaultRow()),
+          child: builder?.call(context, item) ?? (item.child ?? _defaultRow()),
         ),
       ),
     );
   }
 
   Widget _defaultRow() {
-    final ContextMenuStyle style = widget.style;
-    final ContextMenuItem<T> item = widget.item;
-
     final Widget leading;
     if (item.prefix != null) {
       leading = Padding(
@@ -123,7 +104,7 @@ class _ContextMenuItemViewState<T extends Object>
         padding: EdgeInsets.only(right: style.iconGap),
         child: Icon(item.icon, size: style.iconSize, color: _foreground),
       );
-    } else if (widget.reserveIconSpace) {
+    } else if (reserveIconSpace) {
       leading = SizedBox(width: style.iconSize + style.iconGap);
     } else {
       leading = const SizedBox.shrink();
@@ -136,7 +117,7 @@ class _ContextMenuItemViewState<T extends Object>
         child: Icon(
           Icons.chevron_right,
           size: style.iconSize,
-          color: item.enabled ? widget.palette.muted : widget.palette.disabled,
+          color: item.enabled ? palette.muted : palette.disabled,
         ),
       );
     } else if (item.shortcut != null) {
@@ -144,14 +125,12 @@ class _ContextMenuItemViewState<T extends Object>
         padding: const EdgeInsets.only(left: 12),
         child: Text(
           item.shortcut!,
-          style: widget.baseTextStyle
+          style: baseTextStyle
               .merge(style.shortcutTextStyle)
               .copyWith(
                 fontSize:
                     style.shortcutTextStyle?.fontSize ?? style.fontSize - 1,
-                color: item.enabled
-                    ? widget.palette.muted
-                    : widget.palette.disabled,
+                color: item.enabled ? palette.muted : palette.disabled,
               ),
         ),
       );

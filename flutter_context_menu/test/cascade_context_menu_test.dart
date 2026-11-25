@@ -196,6 +196,14 @@ Future<TestGesture> _hover(WidgetTester tester, Finder finder) async {
   return gesture;
 }
 
+/// 某一行的背景色：高亮时是 `palette.hover`，否则 `Colors.transparent`。
+Color? _rowFill(WidgetTester tester, int index, int level) {
+  final Ink ink = tester.widget<Ink>(
+    find.byKey(contextMenuItemKey(index, level)),
+  );
+  return (ink.decoration as BoxDecoration?)?.color;
+}
+
 void main() {
   testWidgets('右键在指针位置打开菜单，条目与快捷键都渲染', (tester) async {
     await tester.pumpWidget(_wrap());
@@ -418,16 +426,26 @@ void main() {
     // danger 被显式 color 压过。
     expect(tester.widget<Text>(find.text('自定义色+危险')).style?.color, teal);
     expect(tester.widget<Icon>(find.byIcon(Icons.delete)).color, teal);
-    // 只有 danger 时仍走 dangerColor。
-    expect(
-      tester.widget<Text>(find.text('危险')).style?.color,
-      theme.colorScheme.error,
-    );
+    // 只有 danger 时走 dangerColor，默认是 Colors.red（不是 colorScheme.error）。
+    expect(tester.widget<Text>(find.text('危险')).style?.color, Colors.red);
     // 禁用优先级最高，color 不生效。
     expect(
       tester.widget<Text>(find.text('禁用带色')).style?.color,
       theme.colorScheme.onSurface.withAlpha(100),
     );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('danger 固定 Colors.red，不跟 colorScheme.error 走', (tester) async {
+    // 深色主题下 M3 的 error 是浅粉，和「删除」惯用的鲜红对不上。
+    await tester.pumpWidget(
+      _wrap(theme: ThemeData(brightness: Brightness.dark)),
+    );
+    await _rightClick(tester, const Offset(400, 300));
+
+    final ThemeData theme = Theme.of(tester.element(find.text('删除')));
+    expect(theme.colorScheme.error, isNot(Colors.red));
+    expect(tester.widget<Text>(find.text('删除')).style?.color, Colors.red);
     expect(tester.takeException(), isNull);
   });
 
@@ -681,6 +699,38 @@ void main() {
     await tester.tap(find.text('图片'));
     await tester.pumpAndSettle();
     expect(tester.getSize(_levelPanel(2)).width, closeTo(220, 0.01));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('点已展开的子菜单父项不会重建子菜单（不重播动画）', (tester) async {
+    await tester.pumpWidget(_wrap(items: _nested, fullScreenTarget: true));
+    await _rightClick(tester, const Offset(200, 200));
+    await tester.tap(find.text('导出为'));
+    await tester.pumpAndSettle();
+
+    // 子菜单面板的 State 就代表这一级；重建会换 GlobalKey、换 State，动画重播。
+    final Finder submenu = _allPanels.at(1);
+    final State<StatefulWidget> before = tester.state(submenu);
+    await tester.tap(find.text('导出为'));
+    await tester.pump();
+    expect(tester.state(submenu), same(before));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('键盘高亮后再 hover 另一行，只有指针那一行亮', (tester) async {
+    await tester.pumpWidget(_wrap(fullScreenTarget: true));
+    await _rightClick(tester, const Offset(200, 200));
+
+    // ↓ 把键盘光标放到第一项可选行（index 0 是分组标题，落到 index 1 的
+    // 「复制」）。
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(_rowFill(tester, 1, 0), isNot(Colors.transparent));
+
+    // 指针移到另一行：键盘高亮必须让位 —— 两套状态各亮一行就是这里的老 bug。
+    await _hover(tester, find.text('删除'));
+    expect(_rowFill(tester, 1, 0), Colors.transparent);
+    expect(_rowFill(tester, 4, 0), isNot(Colors.transparent));
     expect(tester.takeException(), isNull);
   });
 

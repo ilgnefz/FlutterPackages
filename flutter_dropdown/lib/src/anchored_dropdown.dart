@@ -561,11 +561,21 @@ class _AnchoredDropdownState<T extends Object>
     );
   }
 
-  /// 补默认字号与状态色；样式里显式给了 color 就尊重它。
-  TextStyle _textStyle(TextStyle? style, Color fallback) =>
-      (style ?? const TextStyle(fontSize: 14)).copyWith(
-        color: style?.color ?? fallback,
-      );
+  /// 补默认字号与状态色。
+  ///
+  /// 颜色优先级：禁用（恒为 [DropdownItemStyle.disabledColor]）> `accent`
+  /// （条目自己的 [AnchoredDropdownItem.color]）>
+  /// [DropdownItemStyle.textStyle] 里显式给的 `color` > `fallback`。
+  TextStyle _textStyle(
+    TextStyle? style,
+    Color fallback, {
+    Color? accent,
+    bool enabled = true,
+  }) {
+    final TextStyle base = style ?? const TextStyle(fontSize: 14);
+    if (!enabled) return base.copyWith(color: fallback);
+    return base.copyWith(color: accent ?? base.color ?? fallback);
+  }
 
   Widget _defaultItemContent(
     BuildContext context,
@@ -585,6 +595,8 @@ class _AnchoredDropdownState<T extends Object>
           style: _textStyle(
             s.textStyle,
             enabled ? s.foreground : s.disabledColor,
+            accent: item.color,
+            enabled: enabled,
           ),
         );
 

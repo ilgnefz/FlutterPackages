@@ -52,18 +52,22 @@ class ContextMenuPanel<T extends Object> extends StatefulWidget {
 
 class ContextMenuPanelState<T extends Object>
     extends State<ContextMenuPanel<T>> {
-  /// 键盘导航的高亮行；null 表示这一级还没用键盘走过。
-  int? _keyboardHighlight;
+  /// 当前「活动行」——鼠标 hover 或键盘导航指向的那一行。
+  ///
+  /// 只有这一份状态。以前 hover 与键盘高亮各存一份（`_hovered` /
+  /// `_keyboardHighlight`），键盘走过一次之后指针再移到别的行，两行会同时
+  /// 亮：键盘行因为 `_keyboardHighlight` 还在，hover 行因为自己的
+  /// `_hovered = true`。行内也不再自持 hover 状态（热重载 / items 原地刷新
+  /// 后旧 State 会把高亮留在别的行上，出现无指针的"幽灵 hover"）。
+  int? _active;
 
-  /// 鼠标 hover 的行。与键盘高亮**分开存**：菜单刚弹出时，鼠标停在点击点
-  /// 上会被派发一次 MouseRegion.enter，若用它当键盘高亮的起点，紧接着按
-  /// ↓↓ 就会落到意外的行（动画里的 Transform / ClipPath 更容易触发这次
-  /// enter）。键盘导航永远从自己的光标出发，不受指针位置影响。
-  int? _hovered;
+  int? get highlightedIndex => _active;
 
-  int? get highlightedIndex => _keyboardHighlight ?? _hovered;
-
-  int? get _effectiveHighlight => _keyboardHighlight ?? _hovered;
+  bool _isSelectable(int? index) =>
+      index != null &&
+      index >= 0 &&
+      index < widget.items.length &&
+      widget.items[index].isSelectable;
 
   List<int> get _selectableIndexes => <int>[
     for (int i = 0; i < widget.items.length; i++)
@@ -71,27 +75,30 @@ class ContextMenuPanelState<T extends Object>
   ];
 
   void setHighlight(int? index) {
-    if (!mounted || _keyboardHighlight == index) return;
-    setState(() => _keyboardHighlight = index);
+    if (!mounted || _active == index) return;
+    setState(() => _active = index);
   }
 
-  void _setHovered(int? index) {
-    if (!mounted || _hovered == index) return;
-    setState(() => _hovered = index);
+  @override
+  void didUpdateWidget(covariant ContextMenuPanel<T> oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 条目被原地替换（菜单开着时刷新内容）后，旧的活动行可能已经变成别的
+    // 东西或不可选，丢掉它，别让高亮挂在无关的行上。
+    if (_active != null && !_isSelectable(_active)) _active = null;
   }
 
   void moveHighlight(int delta) {
     final List<int> indexes = _selectableIndexes;
     if (indexes.isEmpty) return;
-    final int current = indexes.indexOf(_keyboardHighlight ?? -1);
-    final int next = _keyboardHighlight == null
+    final int current = indexes.indexOf(_active ?? -1);
+    final int next = _active == null
         ? (delta > 0 ? 0 : indexes.length - 1)
         : (current + delta).clamp(0, indexes.length - 1);
     setHighlight(indexes[next]);
   }
 
   void activateHighlighted() {
-    final int? index = _effectiveHighlight;
+    final int? index = _active;
     if (index == null || index >= widget.items.length) return;
     final ContextMenuItem<T> item = widget.items[index];
     if (!item.isSelectable) return;
@@ -103,7 +110,7 @@ class ContextMenuPanelState<T extends Object>
   }
 
   void openHighlightedSubmenu() {
-    final int? index = _effectiveHighlight;
+    final int? index = _active;
     if (index == null || index >= widget.items.length) return;
     final ContextMenuItem<T> item = widget.items[index];
     if (item.hasChildren && item.enabled) widget.onOpenSubmenu(index, item);
@@ -154,17 +161,16 @@ class ContextMenuPanelState<T extends Object>
         style: style,
         baseTextStyle: baseTextStyle,
         palette: palette,
-        highlighted:
-            _effectiveHighlight == index || widget.activeSubmenuIndex == index,
+        highlighted: _active == index || widget.activeSubmenuIndex == index,
         reserveIconSpace: reserveIconSpace,
         builder: widget.itemBuilder,
         onHover: (bool hovering) {
           if (hovering) {
-            _setHovered(index);
+            setHighlight(index);
             widget.onHoverItem(index);
-          } else if (_hovered == index) {
+          } else if (_active == index) {
             // 换到另一行时 exit / enter 的先后顺序不确定，只清自己那一行。
-            _setHovered(null);
+            setHighlight(null);
           }
         },
         onTap: () {

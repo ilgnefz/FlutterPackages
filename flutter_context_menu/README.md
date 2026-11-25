@@ -111,7 +111,7 @@ ContextMenuItem<String>(
 ),
 ```
 
-**单行颜色**：`danger` 只是「红色」这一类常用语义；要别的颜色就直接给这一行 `color`，文字和行首 `icon` / `prefix` 一起换色。优先级是 **禁用 > `color` > `danger` > 主题前景色**，行尾快捷键提示仍用弱化的 `muted` 色。
+**单行颜色**：`danger` 只是「红色」这一类常用语义（用的是 `Colors.red`，明暗主题都一样，和常见的删除按钮同色）；要别的颜色就直接给这一行 `color`，文字和行首 `icon` / `prefix` 一起换色。优先级是 **禁用 > `color` > `danger` > 主题前景色**，行尾快捷键提示仍用弱化的 `muted` 色。
 
 ```dart
 ContextMenuItem<String>(
@@ -177,7 +177,7 @@ style: const ContextMenuStyle().copyWith(
 
 `lip`（默认 8）是揭示动画在 progress = 0 时保留的可见量：角揭示是 `lip × lip` 的小三角，`unfold` 是 `lip` 厚的薄边。调大会让起始帧露得更多、更像从锚点「长出来」，调小则更接近从零面积长开——一般不用动。
 
-颜色字段（`backgroundColor` / `borderColor` / `dividerColor` / `hoverColor` / `foreground` / `muted` / `disabledColor` / `dangerColor` / `shadowColor`）默认 null，走当前 Theme；文字样式以 `Theme.textTheme.bodyMedium` 为基底，`textStyle` / `headerTextStyle` / `shortcutTextStyle` 只覆盖同名字段。
+颜色字段（`backgroundColor` / `borderColor` / `dividerColor` / `hoverColor` / `foreground` / `muted` / `disabledColor` / `shadowColor`）默认 null，走当前 Theme；`dangerColor` 是唯一的例外，默认 `Colors.red`（固定值，不读 `colorScheme.error`——M3 的 error 在浅色下是深砖红、深色下是浅粉，和"删除"惯用的鲜红对不上）。文字样式以 `Theme.textTheme.bodyMedium` 为基底，`textStyle` / `headerTextStyle` / `shortcutTextStyle` 只覆盖同名字段。
 
 `reveal` 可选，两种基础形态是**两套不同的运动**：
 

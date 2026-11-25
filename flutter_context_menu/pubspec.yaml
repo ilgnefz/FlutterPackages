@@ -1,6 +1,6 @@
 name: flutter_context_menu
 description: "Cascading right-click context menus for Flutter — arbitrary nesting, edge-aware placement, keyboard navigation and reveal animations."
-version: 0.7.0
+version: 0.8.1
 homepage:
 
 environment:

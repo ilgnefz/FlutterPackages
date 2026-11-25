@@ -133,6 +133,21 @@ TextDropdownItem('del', label: '删除', onTap: (ctx) => showConfirm(ctx))
 `showDialog` / 读 provider；树状级联、就地展开子级这类交互由此组合，不必
 再另加弹窗选项。
 
+`label` 想单独换个颜色（高亮某个动作、按状态标色）就传 `color`，值项与动作
+项都支持：
+
+```dart
+AnchoredDropdownItem.action(
+  label: '清空筛选',
+  color: const Color(0xFFDC2626),
+  onTap: (ctx) => clearFilters(),
+)
+```
+
+优先级：禁用（永远是 `disabledColor`）> 条目的 `color` > 面板
+`textStyle.color` > `foreground`。`color` 只作用于内置的 `label` 文字，传了
+`child` 就由自己的内容负责配色。
+
 #### 纯动作菜单
 
 整份列表都是动作项时没有「选中值」，用 `AnchoredDropdownItem.action` 构造：
