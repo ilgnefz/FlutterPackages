@@ -22,6 +22,18 @@
 ///
 /// 单项的 [TextDropdownItem.textStyle] 用 `merge` 覆盖组件级选项样式。
 ///
+/// ## 选项：选择项与动作项可混用
+///
+/// item 不传 `onTap` 时是「选择项」：点击回传 `value` 给 `onChanged` 并收起面板。
+/// 传了 `onTap` 就是「动作项」：点击执行自己的回调、不回传 `value`、也不显示
+/// 选中勾；`closeOnTap: false` 可让面板保持展开（做级联 / 就地展开子级时用）。
+/// 回调拿到的 `context` 是门面在主树里的 context，可直接 showDialog / 读 provider。
+/// 级联子菜单、树形展开这类交互由此组合，不必再另加弹窗选项。
+///
+/// ```dart
+/// TextDropdownItem('del', label: '删除', onTap: (ctx) => showConfirm(ctx))
+/// ```
+///
 /// 两者不传 style 时分别取 `XxxStyle.of(context)`，按 `ThemeData.brightness`
 /// 在 light / dark 之间自动切换；只改几项用 `.copyWith(...)`。
 ///

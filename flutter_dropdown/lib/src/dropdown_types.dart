@@ -83,6 +83,9 @@ class DropdownWidth {
 /// 一个选项。`child` 与 [label] 二选一，都没有时退化为 `value.toString()`。
 ///
 /// `child` 可以是任意 Widget —— Icon、Image、Row 等都能直接放进来。
+///
+/// 纯动作菜单（筛选、工具面板）没有「选中值」，用
+/// [AnchoredDropdownItem.action] 构造即可，不用为每一项编一个占位值。
 @immutable
 class AnchoredDropdownItem<T extends Object> {
   const AnchoredDropdownItem(
@@ -90,10 +93,48 @@ class AnchoredDropdownItem<T extends Object> {
     this.label,
     this.child,
     this.enabled = true,
-  });
+    this.onTap,
+    this.closeOnTap = true,
+  }) : assert(
+         value != null || onTap != null,
+         'No value to select: build the item with '
+         'AnchoredDropdownItem.action instead.',
+       );
+
+  /// 动作项：点击只执行 [onTap]，没有值。
+  ///
+  /// 它不参与选中态、不回传 [AnchoredDropdown.onChanged]，所以整份列表都是
+  /// 动作项时，`items` 的类型参数、`AnchoredDropdown.value` 都可以不写：
+  ///
+  /// ```dart
+  /// AnchoredDropdown(
+  ///   trigger: const Icon(Icons.filter_list_alt),
+  ///   items: <AnchoredDropdownItem<Object>>[
+  ///     AnchoredDropdownItem.action(
+  ///       label: '只看已勾选',
+  ///       closeOnTap: false, // 多选筛选：点完不收起
+  ///       onTap: () => toggle(Filter.checked),
+  ///     ),
+  ///   ],
+  /// )
+  /// ```
+  ///
+  /// 泛型参数只用来和值项对齐类型，本身不参与运行；一份动作项列表用
+  /// `AnchoredDropdownItem<Object>` 声明即可，不要为它编枚举或占位值。
+  const AnchoredDropdownItem.action({
+    required this.onTap,
+    this.label,
+    this.child,
+    this.enabled = true,
+    this.closeOnTap = true,
+  }) : value = null,
+       assert(onTap != null, 'AnchoredDropdownItem.action needs an onTap.');
 
   /// 选中时回传给 [AnchoredDropdown.onChanged] 的值。
-  final T value;
+  ///
+  /// 只有值项有值；动作项（[AnchoredDropdownItem.action]）恒为 null —— 点击
+  /// 时走 [onTap]，不经过 `onChanged`。
+  final T? value;
 
   /// 默认渲染用的文字；[child] 为空时生效。
   final String? label;
@@ -103,6 +144,23 @@ class AnchoredDropdownItem<T extends Object> {
 
   /// 是否可点。
   final bool enabled;
+
+  /// 这一项被点击时执行的动作。提供后本项成为「动作项」：
+  ///
+  /// - 点击只执行 [onTap]，不再回传 [AnchoredDropdown.onChanged]、也不切换
+  ///   选中值，且不显示选中勾；
+  /// - 点完是否收起面板由 [closeOnTap] 决定。
+  ///
+  /// 不提供时是普通「选择项」：点击回传 value 并收起面板。两种项可在同一个
+  /// `items` 列表里混用，例如普通值项 + 打开子菜单 / 弹窗的级联项。
+  ///
+  /// `context` 是门面自身在主树里的 context（不是浮层 context），可直接用于
+  /// showDialog / Navigator 以及读取 InheritedWidget（如 Riverpod 的 ref）。
+  final void Function(BuildContext context)? onTap;
+
+  /// 动作项点击后是否收起面板，默认 true。仅 [onTap] 非空时生效。
+  /// 级联场景希望点父项后保留面板、就地展开子级时设为 false。
+  final bool closeOnTap;
 }
 
 /// 触发器（显示在外面的字段）外观。**只有内置字段的 [TextDropdown] 需要**；
@@ -204,6 +262,7 @@ class DropdownItemStyle {
     this.itemHeight = 36.0,
     this.itemGap = 0.0,
     this.itemPadding = const EdgeInsets.symmetric(horizontal: 10),
+    this.scrollbarThickness = 4.0,
     this.shadowOpacity = 0.10,
     this.shadowBlurRadius = 12.0,
     this.shadowOffset = const Offset(0, 6),
@@ -247,6 +306,7 @@ class DropdownItemStyle {
     double? itemHeight,
     double? itemGap,
     EdgeInsetsGeometry? itemPadding,
+    double? scrollbarThickness,
     double? shadowOpacity,
     double? shadowBlurRadius,
     Offset? shadowOffset,
@@ -272,6 +332,7 @@ class DropdownItemStyle {
     itemHeight: itemHeight ?? this.itemHeight,
     itemGap: itemGap ?? this.itemGap,
     itemPadding: itemPadding ?? this.itemPadding,
+    scrollbarThickness: scrollbarThickness ?? this.scrollbarThickness,
     shadowOpacity: shadowOpacity ?? this.shadowOpacity,
     shadowBlurRadius: shadowBlurRadius ?? this.shadowBlurRadius,
     shadowOffset: shadowOffset ?? this.shadowOffset,
@@ -317,6 +378,10 @@ class DropdownItemStyle {
 
   /// 选项行内边距：行内内容到选项行外框的距离。
   final EdgeInsetsGeometry itemPadding;
+
+  /// 滚动条厚度。桌面 / Web 上 [Scrollbar] 默认 8，离行尾箭头太近容易
+  /// 误触，这里收到 4。
+  final double scrollbarThickness;
 
   /// 阴影最大不透明度，实际值随展开进度渐强。
   final double shadowOpacity;

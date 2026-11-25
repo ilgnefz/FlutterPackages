@@ -1,3 +1,20 @@
+## 1.0.5
+
+* `AnchoredDropdownItem.action(...)`：**没有值**的动作项。纯动作菜单（筛选、
+  工具面板）不必再为每一项编一个占位 `value`，`items` 与 `AnchoredDropdown`
+  的类型参数、`value` / `onChanged` 都能省掉（`T` 推成 `Object`）。
+* `AnchoredDropdownItem.value` 改为 `T?`：只有值项有值。普通构造传 null 又
+  没给 `onTap` 时断言报错，提示改用 `.action`。
+* 行内容不再对空值跑 `value.toString()`（动作项没给 `label` 时留空）。
+* 新增 3 条测试：整份列表只有动作项、无值无类型参数时照常展开与回调；
+  `.action` 不带 label 也不崩；面板开着时改状态，行内容（勾）立刻刷新。
+
+## 1.0.4
+
+* `DropdownItemStyle.scrollbarThickness`：滚动条厚度，默认 4（桌面 / Web 上
+  `Scrollbar` 默认 8，离行尾箭头太近容易误触）。`TextDropdown` 与
+  `AnchoredDropdown` 共用，用 `copyWith(scrollbarThickness: ...)` 调整。
+
 ## 1.0.3
 
 * 列表右侧的滚动条改成**贴着面板内边缘**：`Scrollbar` 现在包在

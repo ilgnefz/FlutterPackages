@@ -1,6 +1,6 @@
 name: flutter_dropdown
 description: Reveal-style dropdowns for Flutter — TextDropdown (built-in field with an attached list) and AnchoredDropdown (any widget as trigger, panel anchored beside it), three reveal animations. Flutter only.
-version: 1.0.3
+version: 1.0.5
 homepage:
 
 environment:

@@ -61,6 +61,7 @@ class AnchoredDropdown<T extends Object> extends StatefulWidget {
     this.itemStyle,
     this.edgePadding = 8.0,
     this.semanticsLabel,
+    this.mouseCursor,
     this.initialOpen = false,
     this.disabled = false,
     this.reduceMotion = false,
@@ -96,9 +97,12 @@ class AnchoredDropdown<T extends Object> extends StatefulWidget {
   itemBuilder;
 
   /// 当前选中值。
+  ///
+  /// 整份列表都是动作项（[AnchoredDropdownItem.action]）时没有选中值，不传即可，
+  /// 类型参数也会随之推成 `Object`，`items` / `onChanged` 都不用写类型。
   final T? value;
 
-  /// 选中某项时回调，随后面板自动收起。
+  /// 选中某项时回调，随后面板自动收起。动作项不经过这里。
   final ValueChanged<T>? onChanged;
 
   /// 打开 / 关闭状态变化时回调。
@@ -121,6 +125,11 @@ class AnchoredDropdown<T extends Object> extends StatefulWidget {
 
   /// 触发组件的无障碍标签；为 null 时不覆盖子组件自带的语义。
   final String? semanticsLabel;
+
+  /// 鼠标停在触发器 / 选项上时的光标；为 null（默认）时统一用手型
+  /// `SystemMouseCursors.click`。禁用整个控件或单个选项时恒为普通箭头。
+  /// 传 `MouseCursor.defer` 可交回父级决定。与 [TextDropdown.mouseCursor] 一致。
+  final MouseCursor? mouseCursor;
 
   /// 初始是否展开。
   final bool initialOpen;
@@ -186,6 +195,9 @@ class _AnchoredDropdownState<T extends Object>
   /// 实际生效的面板外观：显式传的 itemStyle，或按明暗主题取的默认值。
   /// 存成字段让浮层 builder 也读同一份配置。
   late DropdownItemStyle _itemStyle;
+
+  /// 触发器 / 选项的默认光标：手型，可被 [AnchoredDropdown.mouseCursor] 覆盖。
+  MouseCursor get _cursor => widget.mouseCursor ?? SystemMouseCursors.click;
 
   @override
   void initState() {
@@ -391,15 +403,18 @@ class _AnchoredDropdownState<T extends Object>
         button: true,
         enabled: !widget.disabled,
         label: widget.semanticsLabel,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: widget.disabled
-              ? null
-              : () {
-                  _triggerFocus.requestFocus();
-                  _setOpen(!_open);
-                },
-          child: trigger,
+        child: MouseRegion(
+          cursor: widget.disabled ? SystemMouseCursors.basic : _cursor,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: widget.disabled
+                ? null
+                : () {
+                    _triggerFocus.requestFocus();
+                    _setOpen(!_open);
+                  },
+            child: trigger,
+          ),
         ),
       ),
     );
@@ -466,6 +481,7 @@ class _AnchoredDropdownState<T extends Object>
         data: ScrollbarTheme.of(context).copyWith(crossAxisMargin: 0),
         child: Scrollbar(
           controller: _listScroll,
+          thickness: _itemStyle.scrollbarThickness,
           child: Padding(
             padding: EdgeInsets.all(_itemStyle.padding),
             child: ConstrainedBox(
@@ -493,8 +509,22 @@ class _AnchoredDropdownState<T extends Object>
     );
   }
 
+  /// 选择项回传 value，动作项执行自己的 onTap；是否收起由 closeOnTap 决定。
+  void _onItemTap(AnchoredDropdownItem<T> item) {
+    final void Function(BuildContext)? action = item.onTap;
+    if (action != null) {
+      action(context);
+      if (item.closeOnTap) _setOpen(false);
+      return;
+    }
+    final T? value = item.value;
+    if (value != null) widget.onChanged?.call(value);
+    _setOpen(false);
+  }
+
   Widget _buildItem(BuildContext context, AnchoredDropdownItem<T> item) {
-    final bool selected = item.value == widget.value;
+    // 动作项不参与选中态：它不代表一个可选的值。
+    final bool selected = item.onTap == null && item.value == widget.value;
     final bool enabled = item.enabled && !widget.disabled;
     final Widget? custom = widget.itemBuilder?.call(
       context,
@@ -508,12 +538,8 @@ class _AnchoredDropdownState<T extends Object>
       selected: selected,
       label: item.label,
       child: InkWell(
-        onTap: enabled
-            ? () {
-                widget.onChanged?.call(item.value);
-                _setOpen(false);
-              }
-            : null,
+        onTap: enabled ? () => _onItemTap(item) : null,
+        mouseCursor: enabled ? _cursor : SystemMouseCursors.basic,
         customBorder: RoundedRectangleBorder(
           borderRadius: BorderRadius.all(
             Radius.circular(_itemStyle.itemRadius),
@@ -552,7 +578,8 @@ class _AnchoredDropdownState<T extends Object>
     final Widget content =
         item.child ??
         Text(
-          item.label ?? item.value.toString(),
+          // 动作项没有值，没给 label 时留空，别让 toString 打出 null。
+          item.label ?? item.value?.toString() ?? '',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: _textStyle(

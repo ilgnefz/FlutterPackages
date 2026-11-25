@@ -28,6 +28,9 @@ List<AnchoredDropdownItem<int>> _manyAnchoredItems() =>
 Rect _scrollbarRect(WidgetTester tester) =>
     tester.getRect(find.byType(Scrollbar));
 
+/// 「勾」不是组件状态：动作菜单里由调用方自己存，这里模拟一份。
+bool _filterOn = false;
+
 void main() {
   group('TextDropdown', () {
     testWidgets('点开显示全部选项，选中后回调并收起', (tester) async {
@@ -58,6 +61,43 @@ void main() {
       expect(picked, 'b');
       // 收起草稿：面板摘掉，行文字不再可见。
       expect(find.text('Apple'), findsNothing);
+    });
+
+    testWidgets('动作项：执行 onTap、不回传 onChanged，closeOnTap 控制收起', (tester) async {
+      String? picked;
+      int taps = 0;
+      await tester.pumpWidget(
+        _wrap(
+          TextDropdown<String>(
+            items: <TextDropdownItem<String>>[
+              TextDropdownItem<String>('a', label: 'Apple'),
+              TextDropdownItem<String>(
+                'act',
+                label: '动作项',
+                onTap: (BuildContext _) => taps++,
+                closeOnTap: false,
+              ),
+            ],
+            onChanged: (String value) => picked = value,
+          ),
+        ),
+      );
+
+      await tester.tap(find.byType(TextDropdown<String>));
+      await tester.pumpAndSettle();
+
+      // 点动作项：只加计数，不回传 value，面板保持展开（closeOnTap: false）。
+      await tester.tap(find.text('动作项'));
+      await tester.pumpAndSettle();
+      expect(taps, 1);
+      expect(picked, isNull);
+      expect(find.text('Apple'), findsOneWidget);
+
+      // 再点普通项：正常回传并收起。
+      await tester.tap(find.text('Apple'));
+      await tester.pumpAndSettle();
+      expect(picked, 'a');
+      expect(find.text('动作项'), findsNothing);
     });
 
     testWidgets('value 非空时触发器显示选中项文案', (tester) async {
@@ -199,6 +239,130 @@ void main() {
       expect(find.text('One'), findsNothing);
     });
 
+    testWidgets('动作项：执行 onTap 后默认收起，且不回传 onChanged', (tester) async {
+      int? picked;
+      int taps = 0;
+      await tester.pumpWidget(
+        _wrap(
+          AnchoredDropdown<int>(
+            trigger: const Text('open'),
+            items: <AnchoredDropdownItem<int>>[
+              AnchoredDropdownItem<int>(
+                9,
+                label: 'Open dialog',
+                onTap: (BuildContext _) => taps++,
+              ),
+            ],
+            onChanged: (int value) => picked = value,
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Open dialog'));
+      await tester.pumpAndSettle();
+      expect(taps, 1);
+      expect(picked, isNull);
+      expect(
+        find.text('Open dialog'),
+        findsNothing,
+        reason: '默认 closeOnTap=true',
+      );
+    });
+
+    testWidgets('纯动作菜单：一条值项都没有，也不用给值类型', (tester) async {
+      final List<String> hits = <String>[];
+      await tester.pumpWidget(
+        _wrap(
+          // 没有 value、没有 onChanged：T 由 items 推成 Object，用不着编值。
+          AnchoredDropdown(
+            trigger: const Text('filter'),
+            items: <AnchoredDropdownItem<Object>>[
+              AnchoredDropdownItem.action(
+                label: '只看已勾选',
+                closeOnTap: false,
+                onTap: (BuildContext _) => hits.add('checked'),
+              ),
+              AnchoredDropdownItem.action(
+                label: '只看已改名',
+                closeOnTap: false,
+                onTap: (BuildContext _) => hits.add('renamed'),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('filter'));
+      await tester.pumpAndSettle();
+      expect(find.text('只看已勾选'), findsOneWidget);
+
+      await tester.tap(find.text('只看已勾选'));
+      await tester.pumpAndSettle();
+      expect(hits, <String>['checked']);
+      expect(
+        find.text('只看已改名'),
+        findsOneWidget,
+        reason: 'closeOnTap: false，连着切多个筛选',
+      );
+
+      await tester.tap(find.text('只看已改名'));
+      await tester.pumpAndSettle();
+      expect(hits, <String>['checked', 'renamed']);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('动作菜单：面板开着时改状态，行内容立刻跟着刷新', (tester) async {
+      _filterOn = false;
+      await tester.pumpWidget(
+        _wrap(
+          StatefulBuilder(
+            builder: (BuildContext context, StateSetter setState) {
+              bool on = _filterOn;
+              return AnchoredDropdown(
+                trigger: const Text('filter'),
+                items: [
+                  AnchoredDropdownItem.action(
+                    closeOnTap: false,
+                    onTap: (BuildContext _) => setState(() => _filterOn = !on),
+                    child: Text(_filterOn ? '☑ 只看已勾选' : '☐ 只看已勾选'),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('filter'));
+      await tester.pumpAndSettle();
+      expect(find.text('☐ 只看已勾选'), findsOneWidget);
+
+      await tester.tap(find.text('☐ 只看已勾选'));
+      await tester.pumpAndSettle();
+      // 勾是调用方画在 child 里的，浮层跟着外层重建。
+      expect(find.text('☑ 只看已勾选'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('动作项没给 label 也不崩（不再走 value.toString）', (tester) async {
+      await tester.pumpWidget(
+        _wrap(
+          AnchoredDropdown(
+            trigger: const Text('open'),
+            items: <AnchoredDropdownItem<Object>>[
+              AnchoredDropdownItem.action(onTap: (BuildContext _) {}),
+            ],
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('initialOpen 一上来就展开', (tester) async {
       await tester.pumpWidget(
         _wrap(
@@ -279,6 +443,34 @@ void main() {
       );
     });
 
+    testWidgets('AnchoredDropdown：滚动条厚度也是 4px，可覆盖', (tester) async {
+      Future<void> check(double? thickness, double expected) async {
+        await tester.pumpWidget(
+          _wrap(
+            AnchoredDropdown<int>(
+              key: ValueKey<double?>(thickness),
+              trigger: const Text('open'),
+              items: _manyAnchoredItems(),
+              itemStyle: thickness == null
+                  ? null
+                  : DropdownItemStyle.light().copyWith(
+                      scrollbarThickness: thickness,
+                    ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<Scrollbar>(find.byType(Scrollbar)).thickness,
+          expected,
+        );
+      }
+
+      await check(null, 4.0);
+      await check(6, 6.0);
+    });
+
     testWidgets('AnchoredDropdown：滚动条同样贴边，与 padding 无关', (tester) async {
       await tester.pumpWidget(
         _wrap(
@@ -304,6 +496,33 @@ void main() {
         tester.getRect(find.byType(SingleChildScrollView)).right,
         closeTo(body.right - 12, 0.01),
       );
+    });
+
+    testWidgets('厚度默认 4px，且可用 itemStyle 覆盖', (tester) async {
+      Future<void> check(double? thickness, double expected) async {
+        await tester.pumpWidget(
+          _wrap(
+            TextDropdown<String>(
+              key: ValueKey<double?>(thickness),
+              items: _manyTextItems(),
+              itemStyle: thickness == null
+                  ? null
+                  : DropdownItemStyle.light().copyWith(
+                      scrollbarThickness: thickness,
+                    ),
+            ),
+          ),
+        );
+        await tester.tap(find.byType(TextDropdown<String>));
+        await tester.pumpAndSettle();
+        expect(
+          tester.widget<Scrollbar>(find.byType(Scrollbar)).thickness,
+          expected,
+        );
+      }
+
+      await check(null, 4.0);
+      await check(7, 7.0);
     });
 
     testWidgets('桌面平台只画这一条，不会跟平台注入的叠成两条', (tester) async {

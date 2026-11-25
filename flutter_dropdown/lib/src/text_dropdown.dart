@@ -144,9 +144,14 @@ class TextDropdownItem<T extends Object> {
     this.label,
     this.enabled = true,
     this.textStyle,
+    this.onTap,
+    this.closeOnTap = true,
   });
 
   /// 选中时回传的值，也是判断选中态的依据。
+  ///
+  /// 动作项（提供了 [onTap]）也需要一个值占位，但它不参与选中态、也不会
+  /// 回传；随便给一个不和真实选项冲突的值即可。
   final T value;
 
   /// 显示文字（列表行与触发器共用）。
@@ -160,6 +165,20 @@ class TextDropdownItem<T extends Object> {
   ///
   /// 用 `merge` 叠加：只写 color 时，字号、字重等仍沿用组件级样式。
   final TextStyle? textStyle;
+
+  /// 这一项被点击时执行的动作。提供后本项成为「动作项」：
+  ///
+  /// - 点击只执行 [onTap]，不再回传 [TextDropdown.onChanged]、也不切换选中
+  ///   值，且不显示选中勾；
+  /// - 点完是否收起面板由 [closeOnTap] 决定。
+  ///
+  /// 不提供时是普通「选择项」：点击回传 value 并收起面板。两种项可在同一个
+  /// `items` 列表里混用。`context` 是门面自身在主树里的 context（不是浮层
+  /// context），可直接用于 showDialog / Navigator 及读取 InheritedWidget。
+  final void Function(BuildContext context)? onTap;
+
+  /// 动作项点击后是否收起面板，默认 true。仅 [onTap] 非空时生效。
+  final bool closeOnTap;
 
   /// 显示串：优先 [label]，否则用 [value] 的字符串形式。
   /// `T = String` 时就是原值，和泛型化之前的行为一致。
@@ -730,6 +749,7 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
         data: ScrollbarTheme.of(context).copyWith(crossAxisMargin: 0),
         child: Scrollbar(
           controller: _listScroll,
+          thickness: _itemStyle.scrollbarThickness,
           child: Padding(
             padding: EdgeInsets.all(_itemStyle.padding),
             child: ConstrainedBox(
@@ -758,8 +778,21 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
     );
   }
 
+  /// 选择项回传 value，动作项执行自己的 onTap；是否收起由 closeOnTap 决定。
+  void _onItemTap(TextDropdownItem<T> item) {
+    final void Function(BuildContext)? action = item.onTap;
+    if (action != null) {
+      action(context);
+      if (item.closeOnTap) _setOpen(false);
+      return;
+    }
+    widget.onChanged?.call(item.value);
+    _setOpen(false);
+  }
+
   Widget _buildItem(TextDropdownItem<T> item) {
-    final bool selected = item.value == widget.value;
+    // 动作项不参与选中态：它不代表一个可选的值。
+    final bool selected = item.onTap == null && item.value == widget.value;
     final bool enabled = item.enabled && !widget.disabled;
     final BorderRadius itemRadius = BorderRadius.all(
       Radius.circular(_itemRadius),
@@ -769,12 +802,7 @@ class _TextDropdownState<T extends Object> extends State<TextDropdown<T>>
       enabled: enabled,
       selected: selected,
       child: InkWell(
-        onTap: enabled
-            ? () {
-                widget.onChanged?.call(item.value);
-                _setOpen(false);
-              }
-            : null,
+        onTap: enabled ? () => _onItemTap(item) : null,
         mouseCursor: enabled ? _cursor : SystemMouseCursors.basic,
         customBorder: RoundedRectangleBorder(borderRadius: itemRadius),
         child: Container(
